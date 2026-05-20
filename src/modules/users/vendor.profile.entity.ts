@@ -1,0 +1,50 @@
+import { Column, Entity, JoinColumn, ManyToOne, type Relation } from "typeorm";
+
+import { BaseEntity } from "../database/base-entity";
+
+import { VendorStatusEnum } from "./constants/enum";
+import { UsersEntity } from "./users.entity";
+
+@Entity("VendorProfiles")
+export class VendorProfileEntity extends BaseEntity {
+  constructor() {
+    super();
+    this.prefix = "vendor";
+  }
+
+  @Column()
+  userId: string;
+
+  @ManyToOne(() => UsersEntity, (user) => user.vendorProfiles)
+  @JoinColumn({ name: "userId" })
+  user: Relation<UsersEntity>;
+
+  @Column()
+  businessName: string;
+
+  @Column()
+  businessEmail: string;
+
+  @Column()
+  businessPhone: string;
+
+  @Column()
+  businessAddress: string;
+
+  @Column({ nullable: true })
+  logoUrl?: string;
+
+  @Column({ nullable: true })
+  description?: string;
+
+  @Column({
+    type: "enum",
+    enum: VendorStatusEnum,
+    enumName: "vendor_status_enum",
+    default: VendorStatusEnum.PENDING,
+  })
+  status: VendorStatusEnum;
+
+  @Column({ nullable: true })
+  approvedBy?: string;
+}

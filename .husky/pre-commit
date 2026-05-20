@@ -1,0 +1,11 @@
+pnpm lint-staged
+
+pnpm sonar || {
+  echo "SonarQube analysis failed. Aborting push."
+  exit 1
+}
+
+pnpm type-check || {
+  echo "TypeScript type checking failed. Aborting push."
+  exit 1
+}

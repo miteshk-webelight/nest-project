@@ -1,0 +1,22 @@
+{
+    "jsc": {
+      "target": "es2023",
+      "parser": {
+        "syntax": "typescript",
+        "decorators": true
+      },
+      "transform": {
+        "decoratorMetadata": true
+      },
+      "baseUrl": "./",
+      "paths": {
+        "@/*": ["src/*"]
+      },
+      "keepClassNames": true
+    },
+    "module": {
+      "type": "commonjs"
+    },
+    "sourceMaps": true,
+    "minify": false
+  }

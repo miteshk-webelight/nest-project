@@ -1,0 +1,21 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+npx --no -- commitlint --edit "$1" || {
+    echo ""
+    echo "------------------------------------------------------------"
+    echo "❌  COMMIT REJECTED"
+    echo "💡  Please use one of these valid commit patterns:"
+    echo "    1. Feature (Standard):    feat: implement create user api endpoint"
+    echo "    2. Bug Fix (Ticket):      JIRA-123: fix: handle null exception in auth service"
+    echo "    3. Maintenance (Scope):   JIRA-456: chore(deps): upgrade nestjs to v10"
+    echo ""
+    echo "    📋  Valid Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+    echo ""
+    echo "    ⚠️  Remember: Use 'add' not 'added'. No period at the end."
+    echo ""
+    echo "    ℹ️  Ticket ID Note: You can use ANY uppercase letters (A-Z)."
+    echo "       Examples: 'API-101:', 'JIRA-500:' are all valid."
+    echo "------------------------------------------------------------"
+    exit 1
+}
