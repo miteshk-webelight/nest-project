@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 
 import { Transform } from "class-transformer";
-import { IsBooleanString, IsEnum, IsIn, IsOptional, IsString } from "class-validator";
+import { IsBooleanString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
 import { UserRoleEnum, VendorStatusEnum } from "../constants/enum";
 
@@ -9,6 +9,7 @@ export class FindAllUsersDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   search?: string;
 
   @ApiPropertyOptional({
@@ -49,11 +50,16 @@ export class FindAllUsersDto {
     default: 1,
   })
   @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
   page?: number = 1;
 
   @ApiPropertyOptional({
     default: 10,
   })
   @Transform(({ value }) => Number(value))
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number = 10;
 }

@@ -1,12 +1,11 @@
-import { Body, Controller, Get, HttpException, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
 
 import { ApiTag } from "../../constants/api-tags.constants";
-import { Permission, Modules } from "../../constants/app.type";
+import { RateLimit } from "../../decorators/rate-limit.decorator";
 import { RoleGuard } from "../../guards/role-guard";
-import { PaginationDto } from "../../types/common.types";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
@@ -46,6 +45,7 @@ export class UsersController {
 
   @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.CREATED })
   @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(20, 60)
   @Post("admins")
   async createAdmin(
     @Res() res: Response,
@@ -64,6 +64,7 @@ export class UsersController {
   }
 
   @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.CREATED })
+  @RateLimit(10, 60)
   @UseGuards(RoleGuard(UserRoleEnum.USER))
   @Post("vendor/register")
   async registerAsVendor(
@@ -84,6 +85,7 @@ export class UsersController {
 
   @ApiSwaggerResponse(MessageResponse)
   @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(20, 60)
   @Patch("vendor/:id/status")
   async updateVendorStatus(
     @Res() res: Response,
@@ -122,6 +124,7 @@ export class UsersController {
 
   @ApiSwaggerResponse(UsersListResponse)
   @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(60, 60) // limit to 60 requests per minute
   @Get()
   async findAll(
     @Res() res: Response,

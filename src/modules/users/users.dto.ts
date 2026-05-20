@@ -1,7 +1,20 @@
 import { ApiProperty } from "@nestjs/swagger";
 
 import { Transform } from "class-transformer";
-import { IsEmail, IsEnum, IsIn, IsNotEmpty, IsOptional, IsPhoneNumber } from "class-validator";
+import {
+  IsEmail,
+  IsEnum,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsPhoneNumber,
+  IsUrl,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from "class-validator";
 
 import { ERROR_MESSAGES } from "../../constants/app.constants";
 import { TrimString } from "../../decorators/trim-string.decorator";
@@ -12,11 +25,14 @@ export class CreateUserDto {
   @ApiProperty()
   @IsNotEmpty()
   @TrimString()
+  @MaxLength(50)
+  @Matches(/^[a-zA-Z\s'-]+$/, { message: "Only letters, spaces, hyphens and apostrophes" })
   firstName: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
   @TrimString()
+  @MaxLength(50)
   lastName?: string;
 
   @ApiProperty()
@@ -35,6 +51,11 @@ export class CreateUserDto {
   @ApiProperty()
   @IsNotEmpty()
   @TrimString()
+  @MinLength(8)
+  @MaxLength(128)
+  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*[\W_]).+$/, {
+    message: "Password must contain at least one uppercase letter, one lowercase letter, and one special character.",
+  })
   password: string;
 }
 
@@ -44,11 +65,15 @@ export class RegisterVendorDto {
   @ApiProperty()
   @IsNotEmpty()
   @TrimString()
+  @MinLength(2)
+  @MaxLength(100)
+  @Matches(/^[a-zA-Z0-9\s'-]+$/, { message: "Only letters, numbers, spaces, hyphens and apostrophes" })
   businessName: string;
 
   @ApiProperty()
   @IsNotEmpty()
   @TrimString()
+  @MaxLength(100)
   @IsEmail({}, { message: ERROR_MESSAGES.INVALID_EMAIL_ADDRESS })
   @Transform(({ value }) => (typeof value === "string" ? value.toLowerCase() : value))
   businessEmail: string;
@@ -56,15 +81,19 @@ export class RegisterVendorDto {
   @ApiProperty()
   @IsNotEmpty()
   @TrimString()
+  @IsPhoneNumber()
   businessPhone: string;
 
   @ApiProperty()
   @IsNotEmpty()
   @TrimString()
+  @MinLength(5)
+  @MaxLength(200)
   businessAddress: string;
 
   @ApiProperty({ required: false })
   @IsOptional()
+  @IsUrl()
   @TrimString()
   logoUrl?: string;
 

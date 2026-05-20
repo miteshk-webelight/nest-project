@@ -2,6 +2,7 @@ export const ERROR_MESSAGES = {
   USER_NOT_FOUND: "User not found",
   INVALID_CREDENTIALS: (remainingAttempts: number) => `Invalid credentials. ${remainingAttempts} attempts remaining.`,
   INVALID_REFRESH_TOKEN: "Invalid refresh token",
+  INVALID_EMAIL_OR_PASSWORD: "Invalid email or password",
   USER_ALREADY_EXISTS: "User already exists",
   UNAUTHORIZED: "Unauthorized",
   LOGIN_BLOCKED: (loginBlockDuration: number) =>
