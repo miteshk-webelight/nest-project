@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
 import { Repository } from "typeorm";
@@ -8,22 +8,20 @@ import { Repository } from "typeorm";
 import { pagination, transformToInstance } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
 
-import { UserRoleEnum, VendorStatusEnum } from "./constants/enum";
+import { UserRoleEnum } from "./constants/enum";
 import { ERROR_MESSAGES } from "./constants/message";
 import { FindAllUsersDto } from "./dto/find-all-users.dto";
-import { UserDetailsResponse } from "./users-details.response";
-import { CreateAdminDto, CreateUserDto, RegisterVendorDto } from "./users.dto";
-import { UsersEntity } from "./users.entity";
-import { UsersListResponse, UsersResponse } from "./users.response";
-import { VendorProfileEntity } from "./vendor.profile.entity";
+import { UpdateUserDto } from "./dto/update-user-dto";
+import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
+import { UsersEntity } from "./entity/users.entity";
+import { UserDetailsResponse } from "./responses/users-details.response";
+import { UsersListResponse, UsersResponse } from "./responses/users.response";
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(UsersEntity)
     private readonly userRepository: Repository<UsersEntity>,
-    @InjectRepository(VendorProfileEntity)
-    private readonly vendorProfileRepository: Repository<VendorProfileEntity>,
   ) {}
 
   private hashPassword(password: string): string {
@@ -52,6 +50,34 @@ export class UsersService {
 
   async createAdmin(user: CreateAdminDto, currentUser: UsersEntity): Promise<UsersEntity> {
     return this.create(user, UserRoleEnum.ADMIN);
+  }
+
+  private async findUserById(id: string): Promise<UsersEntity> {
+    const user = await this.userRepository
+      .createQueryBuilder("user")
+      .leftJoinAndSelect("user.vendorProfiles", "vendorProfiles")
+      .where("user.id = :id", { id })
+      .getOne();
+
+    if (!user) {
+      throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
+    }
+
+    return user;
+  }
+
+  async getMyProfile(user: UsersEntity): Promise<UserDetailsResponse> {
+    const existingUser = await this.findUserById(user.id);
+
+    return transformToInstance(UserDetailsResponse, existingUser) as UserDetailsResponse;
+  }
+
+  async updateMyProfile(user: UsersEntity, dto: UpdateUserDto): Promise<void> {
+    const existingUser = await this.findUserById(user.id);
+
+    Object.assign(existingUser, dto);
+
+    await this.userRepository.save(existingUser);
   }
 
   async findAll(query: FindAllUsersDto): Promise<UsersListResponse> {
@@ -117,71 +143,34 @@ export class UsersService {
   }
 
   async findOne(id: string): Promise<UserDetailsResponse> {
-    const user = await this.userRepository
-      .createQueryBuilder("user")
-      .leftJoinAndSelect("user.vendorProfiles", "vendorProfiles")
-      .where("user.id = :id", { id })
-      .getOne();
+    const user = await this.findUserById(id);
+
+    return transformToInstance(UserDetailsResponse, user) as UserDetailsResponse;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    const user = await this.findUserById(id);
+
+    await this.userRepository.softDelete(user.id);
+  }
+
+  async restoreUser(id: string): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: {
+        id,
+      },
+      withDeleted: true,
+    });
 
     if (!user) {
       throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
     }
 
-    return transformToInstance(UserDetailsResponse, user) as UserDetailsResponse;
-  }
-
-  async registerAsVendor(user: UsersEntity, vendorDto: RegisterVendorDto): Promise<VendorProfileEntity> {
-    return this.userRepository.manager.transaction(async (manager) => {
-      const existingUser = await manager.getRepository(UsersEntity).findOne({
-        where: { id: user.id },
-      });
-
-      if (!existingUser) {
-        throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
-      }
-
-      const existingApplication = await manager
-        .getRepository(VendorProfileEntity)
-        .createQueryBuilder("vendor")
-        .where("vendor.userId = :userId", {
-          userId: existingUser.id,
-        })
-        .andWhere("vendor.status IN (:...statuses)", {
-          statuses: [VendorStatusEnum.PENDING, VendorStatusEnum.APPROVED, VendorStatusEnum.SUSPENDED],
-        })
-        .getOne();
-
-      if (existingApplication) {
-        throw new ConflictException(ERROR_MESSAGES.VENDOR_APPLICATION_ALREADY_EXISTS);
-      }
-
-      const vendorProfile = manager.getRepository(VendorProfileEntity).create({
-        ...vendorDto,
-        userId: existingUser.id,
-        status: VendorStatusEnum.PENDING,
-      });
-
-      return manager.getRepository(VendorProfileEntity).save(vendorProfile);
-    });
-  }
-
-  async updateVendorStatus(vendorId: string, status: VendorStatusEnum, admin: UsersEntity): Promise<void> {
-    if (admin.role !== UserRoleEnum.ADMIN) {
-      throw new ForbiddenException(ERROR_MESSAGES.ADMIN_ONLY);
+    // User is already active
+    if (!user.deletedAt) {
+      throw new ConflictException(ERROR_MESSAGES.USER_ALREADY_ACTIVE);
     }
 
-    const vendorProfile = await this.vendorProfileRepository
-      .createQueryBuilder("vendor")
-      .where("vendor.id = :vendorId", { vendorId })
-      .getOne();
-    if (!vendorProfile) throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
-
-    vendorProfile.status = status;
-    vendorProfile.approvedBy = status === VendorStatusEnum.APPROVED ? admin.id : undefined;
-    await this.vendorProfileRepository.save(vendorProfile);
-
-    if (status === VendorStatusEnum.APPROVED) {
-      await this.userRepository.update({ id: vendorProfile.userId }, { role: UserRoleEnum.VENDOR });
-    }
+    await this.userRepository.restore(id);
   }
 }

@@ -1,6 +1,6 @@
 import { Column, Entity, JoinColumn, ManyToOne, type Relation } from "typeorm";
 
-import { BaseEntity } from "../database/base-entity";
+import { BaseEntity } from "../../database/base-entity";
 
 import { UsersEntity } from "./users.entity";
 

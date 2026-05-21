@@ -5,7 +5,7 @@ import { IsOptional, IsNumber, Min } from "class-validator";
 import { Request } from "express";
 
 import { TrimString } from "../decorators/trim-string.decorator";
-import { UsersEntity } from "../modules/users/users.entity";
+import { UsersEntity } from "../modules/users/entity/users.entity";
 
 export interface RequestUser extends Request {
   user: UsersEntity;

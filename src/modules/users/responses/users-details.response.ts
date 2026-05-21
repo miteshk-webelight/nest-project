@@ -1,8 +1,8 @@
 import { Expose, Type } from "class-transformer";
 
-import { ApiPropertyWritable } from "../swagger/swagger.writable.decorator";
-
-import { UserRoleEnum, VendorStatusEnum } from "./constants/enum";
+import { ApiPropertyWritable } from "../../../modules/swagger/swagger.writable.decorator";
+import { VendorStatusEnum } from "../../../modules/vendors/constants/enum";
+import { UserRoleEnum } from "../constants/enum";
 
 class VendorProfileResponse {
   @Expose()

@@ -1,11 +1,11 @@
 import { Column, Entity, OneToMany } from "typeorm";
 
-import { BaseEntity } from "../database/base-entity";
-import { UserSessionEntity } from "../userSessions/userSession.entity";
+import { BaseEntity } from "../../database/base-entity";
+import { UserSessionEntity } from "../../userSessions/userSession.entity";
+import { VendorProfileEntity } from "../../vendors/vendor.profile.entity";
+import { UserRoleEnum } from "../constants/enum";
 
 import { AddressEntity } from "./address.entity";
-import { UserRoleEnum } from "./constants/enum";
-import { VendorProfileEntity } from "./vendor.profile.entity";
 
 @Entity("Users")
 export class UsersEntity extends BaseEntity {

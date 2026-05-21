@@ -12,6 +12,7 @@ import { FileManagementModule } from "./modules/fileManagment/fileManagment.modu
 import { RateLimitGuard } from "./modules/rateLimiter/guards/rate-limit.guard";
 import { RateLimiterModule } from "./modules/rateLimiter/rate-limiter.module";
 import { UsersModule } from "./modules/users/users.module";
+import { VendorsModule } from "./modules/vendors/vendors.module";
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from "./modules/users/users.module";
     ThrottlerModule.forRoot(throttlerConfig),
     UsersModule,
     RateLimiterModule,
+    VendorsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -3,14 +3,13 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { RedisModule } from "../redis/redisModule";
 
-import { AddressEntity } from "./address.entity";
+import { AddressEntity } from "./entity/address.entity";
+import { UsersEntity } from "./entity/users.entity";
 import { UsersController } from "./users.controller";
-import { UsersEntity } from "./users.entity";
 import { UsersService } from "./users.service";
-import { VendorProfileEntity } from "./vendor.profile.entity";
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UsersEntity, AddressEntity, VendorProfileEntity]), RedisModule],
+  imports: [TypeOrmModule.forFeature([UsersEntity, AddressEntity]), RedisModule],
   controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService, TypeOrmModule],

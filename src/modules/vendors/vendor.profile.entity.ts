@@ -1,9 +1,9 @@
 import { Column, Entity, JoinColumn, ManyToOne, type Relation } from "typeorm";
 
 import { BaseEntity } from "../database/base-entity";
+import { UsersEntity } from "../users/entity/users.entity";
 
 import { VendorStatusEnum } from "./constants/enum";
-import { UsersEntity } from "./users.entity";
 
 @Entity("VendorProfiles")
 export class VendorProfileEntity extends BaseEntity {

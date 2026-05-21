@@ -3,7 +3,8 @@ import { ApiPropertyOptional } from "@nestjs/swagger";
 import { Transform } from "class-transformer";
 import { IsBooleanString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
 
-import { UserRoleEnum, VendorStatusEnum } from "../constants/enum";
+import { VendorStatusEnum } from "../../../modules/vendors/constants/enum";
+import { UserRoleEnum } from "../constants/enum";
 
 export class FindAllUsersDto {
   @ApiPropertyOptional()

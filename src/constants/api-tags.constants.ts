@@ -11,4 +11,5 @@ export enum ApiTag {
   Multipart = "Multipart",
   Presigned = "Presigned",
   Download = "Download",
+  Vendors = "Vendors",
 }

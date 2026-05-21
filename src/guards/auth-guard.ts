@@ -6,7 +6,7 @@ import { Repository } from "typeorm";
 
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
 import { AuthHelperService } from "../modules/auth/auth.helper.service";
-import { UsersEntity } from "../modules/users/users.entity";
+import { UsersEntity } from "../modules/users/entity/users.entity";
 
 @Injectable()
 export class AuthGuard {
