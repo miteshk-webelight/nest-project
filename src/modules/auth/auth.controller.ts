@@ -3,9 +3,9 @@ import { ApiTags } from "@nestjs/swagger";
 
 import { ApiTag } from "../../constants/api-tags.constants";
 import { Public } from "../../decorators/public.decorator";
-import { RateLimit } from "../../decorators/rate-limit.decorator";
 import { clearCookies, setAuthCookie, setRefreshTokenCookie } from "../../utils/cookie.utils";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
+import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
 

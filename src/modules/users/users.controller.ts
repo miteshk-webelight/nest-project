@@ -4,9 +4,9 @@ import { ApiTags } from "@nestjs/swagger";
 import { StatusCodes } from "http-status-codes";
 
 import { ApiTag } from "../../constants/api-tags.constants";
-import { RateLimit } from "../../decorators/rate-limit.decorator";
 import { RoleGuard } from "../../guards/role-guard";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
+import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
 

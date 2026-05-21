@@ -1,6 +1,6 @@
 import { SetMetadata } from "@nestjs/common";
 
-export const RATE_LIMIT_KEY = "rate_limit";
+import { RATE_LIMIT_KEY } from "../constants/rate-limiter.constants";
 
 export interface RateLimitOptions {
   limit: number;

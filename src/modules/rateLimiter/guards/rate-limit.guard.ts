@@ -1,8 +1,9 @@
 import { CanActivate, ExecutionContext, Injectable, HttpException, HttpStatus } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
 
-import { RATE_LIMIT_KEY, RateLimitOptions } from "../decorators/rate-limit.decorator";
-import { RedisService } from "../modules/redis/redis.service";
+import { RedisService } from "../../redis/redis.service";
+import { RATE_LIMIT_KEY } from "../constants/rate-limiter.constants";
+import { RateLimitOptions } from "../decorators/rate-limit.decorator";
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {

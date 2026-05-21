@@ -6,14 +6,22 @@ import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
 import { throttlerConfig } from "./config/throttle.config";
 import { AuthGuard } from "./guards/auth-guard";
-import { RateLimitGuard } from "./guards/rate-limit.guard";
 import { AuthModule } from "./modules/auth/auth.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { FileManagementModule } from "./modules/fileManagment/fileManagment.module";
+import { RateLimitGuard } from "./modules/rateLimiter/guards/rate-limit.guard";
+import { RateLimiterModule } from "./modules/rateLimiter/rate-limiter.module";
 import { UsersModule } from "./modules/users/users.module";
 
 @Module({
-  imports: [DatabaseModule, AuthModule, FileManagementModule, ThrottlerModule.forRoot(throttlerConfig), UsersModule],
+  imports: [
+    DatabaseModule,
+    AuthModule,
+    FileManagementModule,
+    ThrottlerModule.forRoot(throttlerConfig),
+    UsersModule,
+    RateLimiterModule,
+  ],
   controllers: [AppController],
   providers: [
     AppService,
