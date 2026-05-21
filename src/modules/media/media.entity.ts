@@ -27,7 +27,4 @@ export class MediaEntity extends BaseEntity {
 
   @Column()
   recordId: string;
-
-  @DeleteDateColumn()
-  deletedAt: Date;
 }

@@ -3,7 +3,7 @@ import { Reflector } from "@nestjs/core";
 
 import { RedisService } from "../../redis/redis.service";
 import { RATE_LIMIT_KEY } from "../constants/rate-limiter.constants";
-import { RateLimitOptions } from "../decorators/rate-limit.decorator";
+import { RateLimitOptions } from "../interfaces/rate-limiter.interface";
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {

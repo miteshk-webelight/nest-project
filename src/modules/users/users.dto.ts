@@ -17,6 +17,7 @@ import {
 } from "class-validator";
 
 import { ERROR_MESSAGES } from "../../constants/app.constants";
+import { VALIDATION_REGEX } from "../../constants/validation.constants";
 import { TrimString } from "../../decorators/trim-string.decorator";
 
 import { UserRoleEnum, VendorStatusEnum } from "./constants/enum";
@@ -26,7 +27,7 @@ export class CreateUserDto {
   @IsNotEmpty()
   @TrimString()
   @MaxLength(50)
-  @Matches(/^[a-zA-Z\s'-]+$/, { message: "Only letters, spaces, hyphens and apostrophes" })
+  @Matches(VALIDATION_REGEX.NAME, { message: "Only letters, spaces, hyphens and apostrophes" })
   firstName: string;
 
   @ApiProperty({ required: false })
@@ -53,7 +54,7 @@ export class CreateUserDto {
   @TrimString()
   @MinLength(8)
   @MaxLength(128)
-  @Matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*[\W_]).+$/, {
+  @Matches(VALIDATION_REGEX.PASSWORD, {
     message: "Password must contain at least one uppercase letter, one lowercase letter, and one special character.",
   })
   password: string;
@@ -67,7 +68,7 @@ export class RegisterVendorDto {
   @TrimString()
   @MinLength(2)
   @MaxLength(100)
-  @Matches(/^[a-zA-Z0-9\s'-]+$/, { message: "Only letters, numbers, spaces, hyphens and apostrophes" })
+  @Matches(VALIDATION_REGEX.BUSINESS_NAME, { message: "Only letters, numbers, spaces, hyphens and apostrophes" })
   businessName: string;
 
   @ApiProperty()

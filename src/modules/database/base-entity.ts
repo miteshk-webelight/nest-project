@@ -1,4 +1,4 @@
-import { BeforeInsert, CreateDateColumn, PrimaryColumn, UpdateDateColumn } from "typeorm";
+import { BeforeInsert, CreateDateColumn, DeleteDateColumn, PrimaryColumn, UpdateDateColumn } from "typeorm";
 import { ulid } from "ulid";
 
 export class BaseEntity {
@@ -12,6 +12,9 @@ export class BaseEntity {
 
   @UpdateDateColumn({ type: "timestamp" })
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt?: Date;
 
   @BeforeInsert()
   generateId(): void {

@@ -32,11 +32,6 @@ export class VendorStatusGuard implements CanActivate {
 
     const { user } = req;
 
-    // BLOCK deleted users
-    if (user.isDeleted) {
-      throw new ForbiddenException("Your account has been deleted");
-    }
-
     // Fetch vendor profile
     const vendorProfile = await this.vendorRepository.findOne({
       where: {

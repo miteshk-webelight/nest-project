@@ -92,10 +92,8 @@ export class UsersService {
     }
 
     // soft delete
-    if (isDeleted !== undefined) {
-      qb.andWhere("user.isDeleted = :isDeleted", {
-        isDeleted: isDeleted === "true",
-      });
+    if (isDeleted === "true") {
+      qb.withDeleted().andWhere("user.deletedAt IS NOT NULL");
     }
 
     // vendor status
@@ -134,12 +132,9 @@ export class UsersService {
 
   async registerAsVendor(user: UsersEntity, vendorDto: RegisterVendorDto): Promise<VendorProfileEntity> {
     return this.userRepository.manager.transaction(async (manager) => {
-      const existingUser = await manager
-        .getRepository(UsersEntity)
-        .createQueryBuilder("user")
-        .setLock("pessimistic_write")
-        .where("user.id = :id", { id: user.id })
-        .getOne();
+      const existingUser = await manager.getRepository(UsersEntity).findOne({
+        where: { id: user.id },
+      });
 
       if (!existingUser) {
         throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
@@ -148,7 +143,6 @@ export class UsersService {
       const existingApplication = await manager
         .getRepository(VendorProfileEntity)
         .createQueryBuilder("vendor")
-        .setLock("pessimistic_write")
         .where("vendor.userId = :userId", {
           userId: existingUser.id,
         })

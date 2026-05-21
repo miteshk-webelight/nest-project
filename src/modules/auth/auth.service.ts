@@ -149,7 +149,6 @@ export class AuthService {
     const user = await this.userRepository
       .createQueryBuilder("user")
       .where("user.email ILIKE :email", { email })
-      .andWhere("user.isDeleted = :isDeleted", { isDeleted: false })
       .getOne();
 
     if (!user) {
