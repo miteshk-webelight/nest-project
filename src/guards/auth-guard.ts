@@ -35,7 +35,7 @@ export class AuthGuard {
     const { sub } = this.authService.validateGuardRequest(atk);
 
     try {
-      const user = await this.usersRepository.findOne({ where: { id: sub, isDeleted: false } });
+      const user = await this.usersRepository.findOne({ where: { id: sub } });
 
       if (!user) {
         throw new UnauthorizedException("Unauthorized");

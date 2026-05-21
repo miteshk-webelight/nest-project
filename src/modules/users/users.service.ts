@@ -51,10 +51,6 @@ export class UsersService {
   }
 
   async createAdmin(user: CreateAdminDto, currentUser: UsersEntity): Promise<UsersEntity> {
-    if (currentUser.role !== UserRoleEnum.ADMIN) {
-      throw new ForbiddenException(ERROR_MESSAGES.ADMIN_ONLY);
-    }
-
     return this.create(user, UserRoleEnum.ADMIN);
   }
 
@@ -96,10 +92,8 @@ export class UsersService {
     }
 
     // soft delete
-    if (isDeleted !== undefined) {
-      qb.andWhere("user.isDeleted = :isDeleted", {
-        isDeleted: isDeleted === "true",
-      });
+    if (isDeleted === "true") {
+      qb.withDeleted().andWhere("user.deletedAt IS NOT NULL");
     }
 
     // vendor status
@@ -137,39 +131,38 @@ export class UsersService {
   }
 
   async registerAsVendor(user: UsersEntity, vendorDto: RegisterVendorDto): Promise<VendorProfileEntity> {
-    if (user.role === UserRoleEnum.ADMIN) {
-      throw new ForbiddenException(ERROR_MESSAGES.VENDOR_CANNOT_REGISTER_AS_ADMIN);
-    }
+    return this.userRepository.manager.transaction(async (manager) => {
+      const existingUser = await manager.getRepository(UsersEntity).findOne({
+        where: { id: user.id },
+      });
 
-    if (user.role === UserRoleEnum.VENDOR) {
-      throw new ConflictException(ERROR_MESSAGES.USER_ALREADY_A_VENDOR);
-    }
+      if (!existingUser) {
+        throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
+      }
 
-    const existingUser = await this.userRepository
-      .createQueryBuilder("user")
-      .where("user.id = :id", { id: user.id })
-      .getOne();
-    if (!existingUser) throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
+      const existingApplication = await manager
+        .getRepository(VendorProfileEntity)
+        .createQueryBuilder("vendor")
+        .where("vendor.userId = :userId", {
+          userId: existingUser.id,
+        })
+        .andWhere("vendor.status IN (:...statuses)", {
+          statuses: [VendorStatusEnum.PENDING, VendorStatusEnum.APPROVED, VendorStatusEnum.SUSPENDED],
+        })
+        .getOne();
 
-    const existingApplication = await this.vendorProfileRepository
-      .createQueryBuilder("vendor")
-      .where("vendor.userId = :userId", { userId: existingUser.id })
-      .andWhere("vendor.status IN (:...statuses)", {
-        statuses: [VendorStatusEnum.PENDING, VendorStatusEnum.APPROVED, VendorStatusEnum.SUSPENDED],
-      })
-      .getOne();
+      if (existingApplication) {
+        throw new ConflictException(ERROR_MESSAGES.VENDOR_APPLICATION_ALREADY_EXISTS);
+      }
 
-    if (existingApplication) {
-      throw new ConflictException(ERROR_MESSAGES.VENDOR_APPLICATION_ALREADY_EXISTS);
-    }
+      const vendorProfile = manager.getRepository(VendorProfileEntity).create({
+        ...vendorDto,
+        userId: existingUser.id,
+        status: VendorStatusEnum.PENDING,
+      });
 
-    const vendorProfile = this.vendorProfileRepository.create({
-      ...vendorDto,
-      userId: existingUser.id,
-      status: VendorStatusEnum.PENDING,
+      return manager.getRepository(VendorProfileEntity).save(vendorProfile);
     });
-
-    return this.vendorProfileRepository.save(vendorProfile);
   }
 
   async updateVendorStatus(vendorId: string, status: VendorStatusEnum, admin: UsersEntity): Promise<void> {

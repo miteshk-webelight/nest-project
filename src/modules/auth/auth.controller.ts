@@ -1,10 +1,11 @@
-import { Body, Controller, Post, Req, Res, UnauthorizedException } from "@nestjs/common";
+import { Body, Controller, Post, Req, Res, UnauthorizedException, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { ApiTag } from "../../constants/api-tags.constants";
 import { Public } from "../../decorators/public.decorator";
 import { clearCookies, setAuthCookie, setRefreshTokenCookie } from "../../utils/cookie.utils";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
+import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
 
@@ -23,6 +24,7 @@ export class AuthController {
 
   @ApiSwaggerResponse(MessageResponse)
   @Public()
+  @RateLimit(5, 60) // limit to 5 requests per minute
   @Post("signup")
   async signup(
     @Res() res: Response,
@@ -41,6 +43,7 @@ export class AuthController {
 
   @ApiSwaggerResponse(MessageResponse)
   @Public()
+  @RateLimit(5, 60)
   @Post("login")
   async login(
     @Res() res: Response,
@@ -59,6 +62,7 @@ export class AuthController {
 
   @ApiSwaggerResponse(MessageResponse)
   @Public()
+  @RateLimit(5, 60)
   @Post("refresh")
   async refreshToken(
     @Res() res: Response,
@@ -101,6 +105,7 @@ export class AuthController {
 
   @ApiSwaggerResponse(MessageResponse)
   @Public()
+  @RateLimit(5, 60)
   @Post("reset-password/link")
   async generateResetPasswordLink(
     @Res() res: Response,
@@ -119,6 +124,7 @@ export class AuthController {
 
   @ApiSwaggerResponse(MessageResponse)
   @Public()
+  @RateLimit(5, 60)
   @Post("reset-password")
   async resetPassword(
     @Res() res: Response,

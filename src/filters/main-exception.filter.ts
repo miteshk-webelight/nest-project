@@ -3,38 +3,46 @@ import { HttpAdapterHost } from "@nestjs/core";
 
 import { captureException } from "@sentry/node";
 
-import { ERROR_MESSAGES } from "src/constants/messages.constants";
-import { logger } from "src/services/logger.service";
+import { ERROR_MESSAGES } from "../constants/messages.constants";
+import { logger } from "../services/logger.service";
 
-@Catch(HttpException)
+@Catch()
 export class MainExceptionFilter implements ExceptionFilter {
-  constructor(private httpAdapterHost: HttpAdapterHost) {}
-  catch(exception: Error, host: ArgumentsHost): void {
-    const { message, stack, response } = exception as AnyType;
-    const { httpAdapter } = this.httpAdapterHost;
-    const ctx = host.switchToHttp();
-    const statusCode = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+  constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
-    if (
-      [HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN, HttpStatus.BAD_REQUEST, HttpStatus.NOT_FOUND].includes(statusCode)
-    ) {
+  catch(exception: unknown, host: ArgumentsHost): void {
+    const { httpAdapter } = this.httpAdapterHost;
+
+    const ctx = host.switchToHttp();
+
+    // HANDLE ALL HTTP EXCEPTIONS
+    if (exception instanceof HttpException) {
+      const statusCode = exception.getStatus();
+      const response = exception.getResponse();
+
       return httpAdapter.reply(ctx.getResponse(), response, statusCode);
     }
 
-    logger.error(`EXCEPTION FILTER:: Exception: ${message}, stack: ${stack}`);
-    captureException(exception, {
+    // UNKNOWN ERRORS
+    const error = exception as Error;
+
+    logger.error(`EXCEPTION FILTER:: Exception: ${error.message}, stack: ${error.stack}`);
+
+    captureException(error, {
       extra: {
-        statusCode,
-        message,
-        stack,
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: error.message,
+        stack: error.stack,
       },
     });
 
-    const responseBody = {
-      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
-      message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
-    };
-
-    return httpAdapter.reply(ctx.getResponse(), responseBody, HttpStatus.INTERNAL_SERVER_ERROR);
+    return httpAdapter.reply(
+      ctx.getResponse(),
+      {
+        statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+        message: ERROR_MESSAGES.INTERNAL_SERVER_ERROR,
+      },
+      HttpStatus.INTERNAL_SERVER_ERROR,
+    );
   }
 }

@@ -22,7 +22,7 @@ export class VendorProfileEntity extends BaseEntity {
   @Column()
   businessName: string;
 
-  @Column()
+  @Column({ unique: true })
   businessEmail: string;
 
   @Column()

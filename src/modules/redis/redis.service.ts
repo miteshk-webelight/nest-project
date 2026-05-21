@@ -78,4 +78,8 @@ export class RedisService {
   async expire(key: string, time: number): Promise<number> {
     return this.redis.expire(key, time);
   }
+
+  async increment(key: string): Promise<number> {
+    return this.redis.incr(key);
+  }
 }

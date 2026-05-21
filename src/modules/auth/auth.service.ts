@@ -152,7 +152,7 @@ export class AuthService {
       .getOne();
 
     if (!user) {
-      throw new BadRequestException(ERROR_MESSAGES.USER_NOT_FOUND);
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_EMAIL_OR_PASSWORD);
     }
 
     if (!user.password || !this.verifyPassword(password, user.password)) {
@@ -197,7 +197,10 @@ export class AuthService {
   }
 
   async generateResetPasswordLink(email: string): Promise<void> {
-    const user = await this.userRepository.createQueryBuilder("user").where("user.email = :email", { email }).getOne();
+    const user = await this.userRepository
+      .createQueryBuilder("user")
+      .where("user.email ILIKE :email", { email })
+      .getOne();
 
     if (!user) {
       throw new BadRequestException(ERROR_MESSAGES.USER_NOT_FOUND);

@@ -43,9 +43,6 @@ export class UsersEntity extends BaseEntity {
   @Column({ default: false })
   isEmailVerified: boolean;
 
-  @Column({ default: false })
-  isDeleted: boolean;
-
   @OneToMany(() => AddressEntity, (address) => address.user)
   addresses: AddressEntity[];
 

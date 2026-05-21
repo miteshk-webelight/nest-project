@@ -81,7 +81,7 @@ export class UserDetailsResponse {
 
   @Expose()
   @ApiPropertyWritable()
-  isDeleted: boolean;
+  deletedAt: Date;
 
   @Expose()
   @ApiPropertyWritable()
