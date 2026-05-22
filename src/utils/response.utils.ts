@@ -8,7 +8,12 @@ import type { Response } from "express";
 export interface CommonResponseType<T> {
   data: T;
   status?: number;
-  transformWith?: ClassConstructor<T>;
+}
+
+interface SuccessResponseType<T, V> {
+  data: T;
+  status?: number;
+  transformWith?: ClassConstructor<V>;
 }
 
 interface ErrorResponseType {
@@ -25,11 +30,11 @@ interface ErrorResponseFormat {
 }
 
 class ResponseUtils {
-  public success<T>(
+  public success<T, V = T>(
     resp: Response,
-    { data, status = StatusCodes.OK, transformWith }: CommonResponseType<T>,
-  ): Response<CommonResponseType<T>> {
-    let responseData = data;
+    { data, status = StatusCodes.OK, transformWith }: SuccessResponseType<T, V>,
+  ): Response<CommonResponseType<V>> {
+    let responseData: T | V = data;
 
     if (transformWith) {
       responseData = plainToInstance(transformWith, data, {
@@ -37,7 +42,10 @@ class ResponseUtils {
       });
     }
 
-    return resp.status(status).send({ data: responseData, status });
+    return resp.status(status).send({
+      data: responseData,
+      status,
+    });
   }
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   public error({ res, error, statusCode, additionalErrors }: ErrorResponseType) {

@@ -16,4 +16,16 @@ export class DatabaseService {
 
     return queryRunner;
   }
+
+  async commitTransaction(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.commitTransaction();
+  }
+
+  async rollbackTransaction(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.rollbackTransaction();
+  }
+
+  async releaseQueryRunner(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.release();
+  }
 }

@@ -1,9 +1,9 @@
 import { Expose } from "class-transformer";
 
-import { ApiPropertyWritable } from "../../modules/swagger/swagger.writable.decorator";
+import { ApiPropertyWritable } from "../../swagger/swagger.writable.decorator";
 
-import type { UserRoleEnum } from "./constants/enum";
-import type { PaginationMeta } from "../../types/pagination.types";
+import type { PaginationMeta } from "../../../types/pagination.types";
+import type { UserRoleEnum } from "../user.constants";
 
 export class UsersResponse {
   @Expose()
@@ -29,6 +29,10 @@ export class UsersResponse {
   @Expose()
   @ApiPropertyWritable()
   role: UserRoleEnum;
+
+  @Expose()
+  @ApiPropertyWritable()
+  createdAt: Date;
 }
 
 export class UsersListResponse {

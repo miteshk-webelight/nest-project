@@ -9,11 +9,11 @@ import { v4 as uuid } from "uuid";
 
 import { appConfig } from "../../config/app.config";
 import { AuthHelperService } from "../../modules/auth/auth.helper.service";
-import { UsersEntity } from "../../modules/users/users.entity";
 import { setAuthCookie, setRefreshTokenCookie } from "../../utils/cookie.utils";
 import { sendResetPasswordEmail } from "../../utils/email.utils";
 import { decryptValue } from "../../utils/encryption.utils";
 import { RedisService } from "../redis/redis.service";
+import { UsersEntity } from "../users/entity/users.entity";
 import { UsersService } from "../users/users.service";
 import { UserSessionService } from "../userSessions/userSession.service";
 

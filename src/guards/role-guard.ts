@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Type } from "@nestjs/common";
 
-import { UserRoleEnum } from "../modules/users/constants/enum";
+import { UserRoleEnum } from "../modules/users/user.constants";
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function RoleGuard(...roles: UserRoleEnum[]): Type<CanActivate> {

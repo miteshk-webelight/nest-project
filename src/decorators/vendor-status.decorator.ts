@@ -1,6 +1,6 @@
 import { SetMetadata } from "@nestjs/common";
 
-import type { VendorStatusEnum } from "../modules/users/constants/enum";
+import type { VendorStatusEnum } from "src/modules/vendors/vendors.constants";
 
 export const VENDOR_STATUS_KEY = "vendor_status";
 

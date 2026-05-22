@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
@@ -10,38 +10,20 @@ import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
 
-import { UserRoleEnum } from "./constants/enum";
-import { SUCCESS_MESSAGES } from "./constants/message";
 import { FindAllUsersDto } from "./dto/find-all-users.dto";
-import { CreateAdminDto, CreateUserDto, RegisterVendorDto, UpdateVendorStatusDto } from "./users.dto";
-import { UsersListResponse, UsersResponse } from "./users.response";
+import { UpdateUserDto } from "./dto/update-user-dto";
+import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
+import { UserDetailsResponse } from "./responses/users-details.response";
+import { UsersListResponse } from "./responses/users.response";
+import { UserRoleEnum, SUCCESS_MESSAGES } from "./user.constants";
 import { UsersService } from "./users.service";
 
-import type { UserDetailsResponse } from "./users-details.response";
 import type { Request, Response } from "express";
 
 @ApiTags(ApiTag.Users)
 @Controller("users")
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
-
-  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.CREATED })
-  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
-  @Post()
-  async create(
-    @Res() res: Response,
-    @Body() user: CreateUserDto,
-  ): Promise<Response<CommonResponseType<MessageResponse>>> {
-    try {
-      await this.usersService.create(user);
-      return responseUtils.success(res, {
-        data: { message: SUCCESS_MESSAGES.USER_CREATED_SUCCESS },
-        status: StatusCodes.CREATED,
-      });
-    } catch (error) {
-      return responseUtils.error({ res, error });
-    }
-  }
 
   @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.CREATED })
   @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
@@ -63,20 +45,21 @@ export class UsersController {
     }
   }
 
-  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.CREATED })
-  @RateLimit(10, 60)
-  @UseGuards(RoleGuard(UserRoleEnum.USER))
-  @Post("vendor/register")
-  async registerAsVendor(
-    @Res() res: Response,
+  @ApiSwaggerResponse(UserDetailsResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.USER, UserRoleEnum.VENDOR, UserRoleEnum.ADMIN))
+  @RateLimit(20, 60)
+  @Get("me")
+  async getMyProfile(
     @Req() req: Request,
-    @Body() vendorDto: RegisterVendorDto,
-  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<UserDetailsResponse>>> {
     try {
-      await this.usersService.registerAsVendor(req.user, vendorDto);
+      const user = await this.usersService.getMyProfile(req.user);
+
       return responseUtils.success(res, {
-        data: { message: SUCCESS_MESSAGES.VENDOR_APPLICATION_SUBMITTED },
-        status: StatusCodes.CREATED,
+        data: user,
+        status: StatusCodes.OK,
+        transformWith: UserDetailsResponse,
       });
     } catch (error) {
       return responseUtils.error({ res, error });
@@ -84,19 +67,21 @@ export class UsersController {
   }
 
   @ApiSwaggerResponse(MessageResponse)
-  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
-  @RateLimit(20, 60)
-  @Patch("vendor/:id/status")
-  async updateVendorStatus(
-    @Res() res: Response,
+  @UseGuards(RoleGuard(UserRoleEnum.USER, UserRoleEnum.VENDOR, UserRoleEnum.ADMIN))
+  @RateLimit(5, 60)
+  @Patch("me")
+  async updateMyProfile(
     @Req() req: Request,
-    @Param("id") id: string,
-    @Body() { status }: UpdateVendorStatusDto,
+    @Res() res: Response,
+    @Body() dto: UpdateUserDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.usersService.updateVendorStatus(id, status, req.user);
+      await this.usersService.updateMyProfile(req.user, dto);
+
       return responseUtils.success(res, {
-        data: { message: SUCCESS_MESSAGES.VENDOR_APPLICATION_UPDATED },
+        data: {
+          message: SUCCESS_MESSAGES.USER_UPDATED_SUCCESS,
+        },
       });
     } catch (error) {
       return responseUtils.error({ res, error });
@@ -116,6 +101,69 @@ export class UsersController {
       return responseUtils.success(res, {
         data: user,
         status: StatusCodes.OK,
+        transformWith: UserDetailsResponse,
+      });
+    } catch (error) {
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(30, 60)
+  @Delete(":id")
+  async deleteUser(
+    @Param("id") id: string,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.usersService.deleteUser(id);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.USER_DELETED_SUCCESS,
+        },
+      });
+    } catch (error) {
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(30, 60)
+  @Patch(":id/restore")
+  async restoreUser(
+    @Param("id") id: string,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.usersService.restoreUser(id);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.USER_RESTORED_SUCCESS,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.CREATED })
+  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(20, 60)
+  @Post()
+  async create(
+    @Res() res: Response,
+    @Body() user: CreateUserDto,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.usersService.create(user);
+      return responseUtils.success(res, {
+        data: { message: SUCCESS_MESSAGES.USER_CREATED_SUCCESS },
+        status: StatusCodes.CREATED,
       });
     } catch (error) {
       return responseUtils.error({ res, error });
@@ -136,6 +184,7 @@ export class UsersController {
       return responseUtils.success(res, {
         data: users,
         status: StatusCodes.OK,
+        transformWith: UsersListResponse,
       });
     } catch (error) {
       return responseUtils.error({ res, error });
