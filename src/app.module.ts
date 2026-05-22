@@ -7,6 +7,7 @@ import { AppService } from "./app.service";
 import { throttlerConfig } from "./config/throttle.config";
 import { AuthGuard } from "./guards/auth-guard";
 import { AuthModule } from "./modules/auth/auth.module";
+import { CategoriesModule } from "./modules/categories/categories.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { FileManagementModule } from "./modules/fileManagment/fileManagment.module";
 import { RateLimitGuard } from "./modules/rateLimiter/guards/rate-limit.guard";
@@ -23,6 +24,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     UsersModule,
     RateLimiterModule,
     VendorsModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [
