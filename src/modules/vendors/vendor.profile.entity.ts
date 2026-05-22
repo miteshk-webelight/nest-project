@@ -3,7 +3,7 @@ import { Column, Entity, JoinColumn, ManyToOne, type Relation } from "typeorm";
 import { BaseEntity } from "../database/base-entity";
 import { UsersEntity } from "../users/entity/users.entity";
 
-import { VendorStatusEnum } from "./constants/enum";
+import { VendorStatusEnum } from "./vendors.constants";
 
 @Entity("VendorProfiles")
 export class VendorProfileEntity extends BaseEntity {
@@ -12,7 +12,7 @@ export class VendorProfileEntity extends BaseEntity {
     this.prefix = "vendor";
   }
 
-  @Column()
+  @Column({ unique: true })
   userId: string;
 
   @ManyToOne(() => UsersEntity, (user) => user.vendorProfiles)
@@ -47,4 +47,7 @@ export class VendorProfileEntity extends BaseEntity {
 
   @Column({ nullable: true })
   approvedBy?: string;
+
+  @Column({ nullable: true, type: "timestamp" })
+  approvedAt?: Date;
 }

@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 import { Transform } from "class-transformer";
 import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsPhoneNumber, Matches, MaxLength, MinLength } from "class-validator";
@@ -7,7 +7,7 @@ import { TrimString } from "src/decorators/trim-string.decorator";
 
 import { ERROR_MESSAGES } from "../../../constants/app.constants";
 import { VALIDATION_REGEX } from "../../../constants/validation.constants";
-import { UserRoleEnum } from "../constants/enum";
+import { UserRoleEnum } from "../user.constants";
 
 export class CreateUserDto {
   @ApiProperty()
@@ -17,7 +17,7 @@ export class CreateUserDto {
   @Matches(VALIDATION_REGEX.NAME, { message: "Only letters, spaces, hyphens and apostrophes" })
   firstName: string;
 
-  @ApiProperty({ required: false })
+  @ApiPropertyOptional()
   @IsOptional()
   @TrimString()
   @MaxLength(50)

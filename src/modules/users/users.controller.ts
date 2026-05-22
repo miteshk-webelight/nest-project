@@ -10,13 +10,12 @@ import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
 
-import { UserRoleEnum } from "./constants/enum";
-import { SUCCESS_MESSAGES } from "./constants/message";
 import { FindAllUsersDto } from "./dto/find-all-users.dto";
 import { UpdateUserDto } from "./dto/update-user-dto";
 import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
 import { UserDetailsResponse } from "./responses/users-details.response";
 import { UsersListResponse } from "./responses/users.response";
+import { UserRoleEnum, SUCCESS_MESSAGES } from "./user.constants";
 import { UsersService } from "./users.service";
 
 import type { Request, Response } from "express";
@@ -60,6 +59,7 @@ export class UsersController {
       return responseUtils.success(res, {
         data: user,
         status: StatusCodes.OK,
+        transformWith: UserDetailsResponse,
       });
     } catch (error) {
       return responseUtils.error({ res, error });
@@ -101,6 +101,7 @@ export class UsersController {
       return responseUtils.success(res, {
         data: user,
         status: StatusCodes.OK,
+        transformWith: UserDetailsResponse,
       });
     } catch (error) {
       return responseUtils.error({ res, error });
@@ -183,6 +184,7 @@ export class UsersController {
       return responseUtils.success(res, {
         data: users,
         status: StatusCodes.OK,
+        transformWith: UsersListResponse,
       });
     } catch (error) {
       return responseUtils.error({ res, error });

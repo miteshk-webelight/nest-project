@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 
 import { Transform } from "class-transformer";
 import { IsEmail, IsNotEmpty, IsOptional, IsPhoneNumber, IsUrl, Matches, MaxLength, MinLength } from "class-validator";
@@ -37,13 +37,13 @@ export class RegisterVendorDto {
   @MaxLength(200)
   businessAddress: string;
 
-  @ApiProperty({ required: false })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsUrl()
   @TrimString()
   logoUrl?: string;
 
-  @ApiProperty({ required: false })
+  @ApiPropertyOptional()
   @IsOptional()
   @TrimString()
   description?: string;

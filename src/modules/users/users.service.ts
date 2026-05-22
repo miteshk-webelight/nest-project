@@ -7,15 +7,15 @@ import { Repository } from "typeorm";
 
 import { pagination, transformToInstance } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
+import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 
-import { UserRoleEnum } from "./constants/enum";
-import { ERROR_MESSAGES } from "./constants/message";
 import { FindAllUsersDto } from "./dto/find-all-users.dto";
 import { UpdateUserDto } from "./dto/update-user-dto";
 import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
 import { UsersEntity } from "./entity/users.entity";
-import { UserDetailsResponse } from "./responses/users-details.response";
 import { UsersListResponse, UsersResponse } from "./responses/users.response";
+import { UserRoleEnum, ERROR_MESSAGES, USER_DETAILS_SELECT_FIELDS, USER_LIST_SELECT_FIELDS } from "./user.constants";
+import { validateUserUniqueFields, validateUserUpdatePayload } from "./utils/user-valiation.utils";
 
 @Injectable()
 export class UsersService {
@@ -52,10 +52,11 @@ export class UsersService {
     return this.create(user, UserRoleEnum.ADMIN);
   }
 
-  private async findUserById(id: string): Promise<UsersEntity> {
+  private async findUserById(id: string): Promise<Partial<UsersEntity>> {
     const user = await this.userRepository
       .createQueryBuilder("user")
       .leftJoinAndSelect("user.vendorProfiles", "vendorProfiles")
+      .select(USER_DETAILS_SELECT_FIELDS)
       .where("user.id = :id", { id })
       .getOne();
 
@@ -66,18 +67,36 @@ export class UsersService {
     return user;
   }
 
-  async getMyProfile(user: UsersEntity): Promise<UserDetailsResponse> {
-    const existingUser = await this.findUserById(user.id);
-
-    return transformToInstance(UserDetailsResponse, existingUser) as UserDetailsResponse;
+  async getMyProfile(user: UsersEntity): Promise<Partial<UsersEntity>> {
+    return this.findUserById(user.id);
   }
 
   async updateMyProfile(user: UsersEntity, dto: UpdateUserDto): Promise<void> {
-    const existingUser = await this.findUserById(user.id);
+    await this.validateUserProfileUpdate(user.id, dto);
 
-    Object.assign(existingUser, dto);
+    await this.userRepository.update(
+      {
+        id: user.id,
+      },
+      dto,
+    );
+  }
 
-    await this.userRepository.save(existingUser);
+  private async validateUserProfileUpdate(userId: string, dto: UpdateUserDto): Promise<void> {
+    validateUserUpdatePayload(dto);
+
+    const existingUser = await this.userRepository
+      .createQueryBuilder("user")
+      .select(["user.id", "user.phoneNumber"])
+      .where("user.phoneNumber = :phoneNumber", {
+        phoneNumber: dto.phoneNumber ?? "",
+      })
+      .andWhere("user.id != :userId", {
+        userId,
+      })
+      .getOne();
+
+    validateUserUniqueFields(dto, existingUser);
   }
 
   async findAll(query: FindAllUsersDto): Promise<UsersListResponse> {
@@ -94,7 +113,10 @@ export class UsersService {
 
     const offset = pagination(page, limit);
 
-    const qb = this.userRepository.createQueryBuilder("user").leftJoinAndSelect("user.vendorProfiles", "vendorProfile");
+    const qb = this.userRepository
+      .createQueryBuilder("user")
+      .leftJoin("user.vendorProfiles", "vendorProfile")
+      .select(USER_LIST_SELECT_FIELDS);
 
     // Search
     if (search) {
@@ -142,16 +164,31 @@ export class UsersService {
     };
   }
 
-  async findOne(id: string): Promise<UserDetailsResponse> {
-    const user = await this.findUserById(id);
+  async findOne(id: string): Promise<Partial<UsersEntity>> {
+    return this.findUserById(id);
+  }
 
-    return transformToInstance(UserDetailsResponse, user) as UserDetailsResponse;
+  private async validateUserDeletion(userId: string): Promise<void> {
+    const vendorProfileExists = await this.userRepository.manager
+      .getRepository(VendorProfileEntity)
+      .createQueryBuilder("vendor")
+      .select("vendor.id")
+      .where("vendor.userId = :userId", {
+        userId,
+      })
+      .getOne();
+
+    if (vendorProfileExists) {
+      throw new ConflictException(ERROR_MESSAGES.USER_LINKED_WITH_VENDOR_PROFILE);
+    }
   }
 
   async deleteUser(id: string): Promise<void> {
     const user = await this.findUserById(id);
 
-    await this.userRepository.softDelete(user.id);
+    await this.validateUserDeletion(user.id!);
+
+    await this.userRepository.softDelete(user.id!);
   }
 
   async restoreUser(id: string): Promise<void> {

@@ -5,8 +5,8 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 
 import { VENDOR_STATUS_KEY } from "../decorators/vendor-status.decorator";
-import { VendorStatusEnum } from "../modules/vendors/constants/enum";
 import { VendorProfileEntity } from "../modules/vendors/vendor.profile.entity";
+import { VendorStatusEnum } from "../modules/vendors/vendors.constants";
 
 @Injectable()
 export class VendorStatusGuard implements CanActivate {
@@ -24,7 +24,7 @@ export class VendorStatusGuard implements CanActivate {
     ]);
 
     // No decorator used
-    if (!requiredStatuses || requiredStatuses.length === 0) {
+    if (!requiredStatuses) {
       return true;
     }
 

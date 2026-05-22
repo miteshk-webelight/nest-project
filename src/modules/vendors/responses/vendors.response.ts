@@ -2,7 +2,7 @@ import { Expose } from "class-transformer";
 
 import { ApiPropertyWritable } from "src/modules/swagger/swagger.writable.decorator";
 
-import { VendorStatusEnum } from "../constants/enum";
+import { VendorStatusEnum } from "../vendors.constants";
 
 export class VendorProfileResponse {
   @Expose()

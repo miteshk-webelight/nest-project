@@ -3,7 +3,7 @@ import { Column, Entity, OneToMany } from "typeorm";
 import { BaseEntity } from "../../database/base-entity";
 import { UserSessionEntity } from "../../userSessions/userSession.entity";
 import { VendorProfileEntity } from "../../vendors/vendor.profile.entity";
-import { UserRoleEnum } from "../constants/enum";
+import { UserRoleEnum } from "../user.constants";
 
 import { AddressEntity } from "./address.entity";
 

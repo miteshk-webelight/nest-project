@@ -12,15 +12,14 @@ import responseUtils, { CommonResponseType } from "../../utils/response.utils";
 import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
-import { UserRoleEnum } from "../users/constants/enum";
+import { UserRoleEnum } from "../users/user.constants";
 
-import { VendorStatusEnum } from "./constants/enum";
-import { SUCCESS_MESSAGES } from "./constants/messages";
 import { RegisterVendorDto } from "./dto/register-vendor.dto";
 import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
 import { UpdateVendorStatusDto } from "./dto/update-vendor-status.dto";
 import { VendorStatusResponse } from "./responses/vendor-status.response";
 import { VendorProfileResponse } from "./responses/vendors.response";
+import { VendorStatusEnum, SUCCESS_MESSAGES } from "./vendors.constants";
 import { VendorsService } from "./vendors.service";
 
 import type { Request, Response } from "express";

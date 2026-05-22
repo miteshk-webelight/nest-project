@@ -1,18 +1,20 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 
-import { IsOptional, IsPhoneNumber, IsString, IsUrl, MaxLength } from "class-validator";
+import { IsNotEmpty, IsOptional, IsPhoneNumber, IsString, IsUrl, MaxLength } from "class-validator";
+
+import { TrimString } from "src/decorators/trim-string.decorator";
 
 export class UpdateUserDto {
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
-  @MaxLength(100)
+  @TrimString()
+  @MaxLength(50)
   firstName?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
-  @MaxLength(100)
+  @TrimString()
+  @MaxLength(50)
   lastName?: string;
 
   @ApiPropertyOptional()

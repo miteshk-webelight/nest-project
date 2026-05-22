@@ -2,7 +2,7 @@ import { ApiProperty } from "@nestjs/swagger";
 
 import { IsIn, IsNotEmpty } from "class-validator";
 
-import { VendorStatusEnum } from "../constants/enum";
+import { VendorStatusEnum } from "../../vendors/vendors.constants";
 
 export class UpdateVendorStatusDto {
   @ApiProperty()
