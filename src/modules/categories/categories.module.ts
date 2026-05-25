@@ -7,7 +7,7 @@ import { UsersEntity } from "../users/entity/users.entity";
 
 import { CategoriesController } from "./categories.controller";
 import { CategoriesService } from "./categories.service";
-import { CategoryEntity } from "./entity/category.entity";
+import { CategoryEntity } from "./category.entity";
 
 @Module({
   imports: [TypeOrmModule.forFeature([CategoryEntity, UsersEntity]), RedisModule, DatabaseModule],

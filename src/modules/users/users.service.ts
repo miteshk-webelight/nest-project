@@ -3,9 +3,11 @@ import crypto from "crypto";
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
-import { Repository } from "typeorm";
+import { Repository, SelectQueryBuilder } from "typeorm";
 
-import { pagination, transformToInstance } from "../../utils/helper.utils";
+import { SortOrderEnum } from "src/constants/common.constants";
+
+import { applyPagination } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 
@@ -13,8 +15,14 @@ import { FindAllUsersDto } from "./dto/find-all-users.dto";
 import { UpdateUserDto } from "./dto/update-user-dto";
 import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
 import { UsersEntity } from "./entity/users.entity";
-import { UsersListResponse, UsersResponse } from "./responses/users.response";
-import { UserRoleEnum, ERROR_MESSAGES, USER_DETAILS_SELECT_FIELDS, USER_LIST_SELECT_FIELDS } from "./user.constants";
+import { UsersListResponse } from "./responses/users.response";
+import {
+  ERROR_MESSAGES,
+  USER_DETAILS_SELECT_FIELDS,
+  USER_LIST_SELECT_FIELDS,
+  UserRoleEnum,
+  UserSortByEnum,
+} from "./user.constants";
 import { validateUserUniqueFields, validateUserUpdatePayload } from "./utils/user-valiation.utils";
 
 @Injectable()
@@ -98,45 +106,57 @@ export class UsersService {
 
     validateUserUniqueFields(dto, existingUser);
   }
-
   async findAll(query: FindAllUsersDto): Promise<UsersListResponse> {
     const {
       page = 1,
       limit = 10,
-      search = "",
-      role,
-      isDeleted,
-      vendorStatus,
-      sortBy = "createdAt",
-      sortOrder = "DESC",
+      sortBy = UserSortByEnum.CREATED_AT,
+      sortOrder = SortOrderEnum.DESC,
+      isPagination = true,
     } = query;
-
-    const offset = pagination(page, limit);
 
     const qb = this.userRepository
       .createQueryBuilder("user")
       .leftJoin("user.vendorProfiles", "vendorProfile")
       .select(USER_LIST_SELECT_FIELDS);
 
-    // Search
+    this.applyUserFilters(qb, query);
+
+    qb.orderBy(`user.${sortBy}`, sortOrder);
+
+    applyPagination(qb, {
+      page,
+      limit,
+      isPagination,
+    });
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      meta: createPaginationMeta(page, limit, total),
+    };
+  }
+
+  private applyUserFilters(qb: SelectQueryBuilder<UsersEntity>, query: FindAllUsersDto): void {
+    const { search, role, isDeleted, vendorStatus } = query;
+
     if (search) {
       qb.andWhere(
         `
-        (
-          user.firstName ILIKE :search
-          OR user.lastName ILIKE :search
-          OR user.email ILIKE :search
-        )
-        `,
+      (
+        user.firstName ILIKE :search
+        OR user.lastName ILIKE :search
+        OR user.email ILIKE :search
+      )
+      `,
         { search: `%${search}%` },
       );
     }
 
     // Role
     if (role) {
-      qb.andWhere("user.role = :role", {
-        role,
-      });
+      qb.andWhere("user.role = :role", { role });
     }
 
     // soft delete
@@ -146,22 +166,8 @@ export class UsersService {
 
     // vendor status
     if (vendorStatus) {
-      qb.andWhere("vendorProfile.status = :vendorStatus", {
-        vendorStatus,
-      });
+      qb.andWhere("vendorProfile.status = :vendorStatus", { vendorStatus });
     }
-
-    // sorting
-    qb.orderBy(`user.${sortBy}`, sortOrder);
-
-    qb.skip(offset).take(limit);
-
-    const [data, total] = await qb.getManyAndCount();
-
-    return {
-      data: transformToInstance(UsersResponse, data) as UsersResponse[],
-      meta: createPaginationMeta(page, limit, total),
-    };
   }
 
   async findOne(id: string): Promise<Partial<UsersEntity>> {

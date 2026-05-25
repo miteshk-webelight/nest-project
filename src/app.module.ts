@@ -2,8 +2,11 @@ import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ThrottlerModule } from "@nestjs/throttler";
 
+import { ClsModule } from "nestjs-cls";
+
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
+import { clsConfig } from "./config/cls.config";
 import { throttlerConfig } from "./config/throttle.config";
 import { AuthGuard } from "./guards/auth-guard";
 import { AuthModule } from "./modules/auth/auth.module";
@@ -25,6 +28,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     RateLimiterModule,
     VendorsModule,
     CategoriesModule,
+    ClsModule.forRoot(clsConfig),
   ],
   controllers: [AppController],
   providers: [

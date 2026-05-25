@@ -1,6 +1,6 @@
 import { Column, Entity, Index } from "typeorm";
 
-import { BaseEntity } from "../../database/base-entity";
+import { BaseEntity } from "../database/base-entity";
 
 @Entity("Categories")
 export class CategoryEntity extends BaseEntity {
@@ -22,10 +22,4 @@ export class CategoryEntity extends BaseEntity {
 
   @Column({ default: true })
   isActive: boolean;
-
-  @Column({ nullable: true })
-  createdBy?: string;
-
-  @Column({ nullable: true })
-  updatedBy?: string;
 }

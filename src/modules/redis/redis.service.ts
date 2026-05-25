@@ -82,4 +82,18 @@ export class RedisService {
   async increment(key: string): Promise<number> {
     return this.redis.incr(key);
   }
+
+  async getOrSet<T>({ key, ttl, fetcher }: { key: string; ttl: number; fetcher: () => Promise<T> }): Promise<T> {
+    const cachedData = await this.get(key);
+
+    if (cachedData) {
+      return JSON.parse(cachedData) as T;
+    }
+
+    const data = await fetcher();
+
+    await this.set(key, JSON.stringify(data), ttl);
+
+    return data;
+  }
 }

@@ -2,6 +2,7 @@ import { ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/com
 import { Reflector } from "@nestjs/core";
 import { InjectRepository } from "@nestjs/typeorm";
 
+import { ClsService } from "nestjs-cls";
 import { Repository } from "typeorm";
 
 import { IS_PUBLIC_KEY } from "../decorators/public.decorator";
@@ -16,6 +17,7 @@ export class AuthGuard {
     private readonly reflector: Reflector,
     @InjectRepository(UsersEntity)
     private readonly usersRepository: Repository<UsersEntity>,
+    private readonly clsService: ClsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -42,6 +44,8 @@ export class AuthGuard {
       }
 
       req.user = user;
+
+      this.clsService.set("userId", user.id);
 
       return true;
     } catch (e) {

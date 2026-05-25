@@ -1,4 +1,4 @@
-import { BeforeInsert, CreateDateColumn, DeleteDateColumn, PrimaryColumn, UpdateDateColumn } from "typeorm";
+import { BeforeInsert, Column, CreateDateColumn, DeleteDateColumn, PrimaryColumn, UpdateDateColumn } from "typeorm";
 import { ulid } from "ulid";
 
 export class BaseEntity {
@@ -15,6 +15,12 @@ export class BaseEntity {
 
   @DeleteDateColumn()
   deletedAt?: Date;
+
+  @Column({ nullable: true })
+  createdBy?: string;
+
+  @Column({ nullable: true })
+  updatedBy?: string;
 
   @BeforeInsert()
   generateId(): void {

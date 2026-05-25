@@ -2,8 +2,8 @@ import { BadRequestException, ConflictException } from "@nestjs/common";
 
 import { ERROR_MESSAGES } from "../categories.constants";
 
+import type { CategoryEntity } from "../category.entity";
 import type { UpdateCategoryDto } from "../dto/update-category.dto";
-import type { CategoryEntity } from "../entity/category.entity";
 
 export function validateCategoryUpdatePayload(dto: UpdateCategoryDto): void {
   if (Object.keys(dto).length === 0) {

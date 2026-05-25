@@ -1,4 +1,4 @@
-import { Expose } from "class-transformer";
+import { Expose, Type } from "class-transformer";
 
 import { ApiPropertyWritable } from "../../swagger/swagger.writable.decorator";
 
@@ -37,6 +37,7 @@ export class UsersResponse {
 
 export class UsersListResponse {
   @Expose()
+  @Type(() => UsersResponse)
   @ApiPropertyWritable()
   data: UsersResponse[];
 

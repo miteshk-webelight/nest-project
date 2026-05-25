@@ -3,6 +3,8 @@ import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
 
+import { logger } from "src/services/logger.service";
+
 import { ApiTag } from "../../constants/api-tags.constants";
 import { RoleGuard } from "../../guards/role-guard";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
@@ -15,7 +17,7 @@ import { UpdateUserDto } from "./dto/update-user-dto";
 import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
 import { UserDetailsResponse } from "./responses/users-details.response";
 import { UsersListResponse } from "./responses/users.response";
-import { UserRoleEnum, SUCCESS_MESSAGES } from "./user.constants";
+import { SUCCESS_MESSAGES, UserRoleEnum } from "./user.constants";
 import { UsersService } from "./users.service";
 
 import type { Request, Response } from "express";
@@ -41,6 +43,7 @@ export class UsersController {
         status: StatusCodes.CREATED,
       });
     } catch (error) {
+      logger.error("Error creating admin user:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -62,6 +65,7 @@ export class UsersController {
         transformWith: UserDetailsResponse,
       });
     } catch (error) {
+      logger.error("Error fetching user profile:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -84,6 +88,7 @@ export class UsersController {
         },
       });
     } catch (error) {
+      logger.error("Error updating user profile:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -104,6 +109,7 @@ export class UsersController {
         transformWith: UserDetailsResponse,
       });
     } catch (error) {
+      logger.error(`Error fetching user with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -125,6 +131,7 @@ export class UsersController {
         },
       });
     } catch (error) {
+      logger.error(`Error deleting user with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -147,6 +154,7 @@ export class UsersController {
         status: StatusCodes.OK,
       });
     } catch (error) {
+      logger.error(`Error restoring user with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -166,6 +174,7 @@ export class UsersController {
         status: StatusCodes.CREATED,
       });
     } catch (error) {
+      logger.error("Error creating user:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -187,6 +196,7 @@ export class UsersController {
         transformWith: UsersListResponse,
       });
     } catch (error) {
+      logger.error("Error fetching users list:", error);
       return responseUtils.error({ res, error });
     }
   }

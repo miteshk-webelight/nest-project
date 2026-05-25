@@ -17,23 +17,25 @@ export const SUCCESS_MESSAGES = {
   CATEGORY_DEACTIVATED_SUCCESS: "Category deactivated successfully",
 };
 
-export const CATEGORY_SELECT_FIELDS = [
-  "category.id",
-  "category.name",
-  "category.slug",
-  "category.description",
-  "category.isActive",
-  "category.createdBy",
-  "category.updatedBy",
-  "category.createdAt",
-  "category.updatedAt",
-];
-
-export const CATEGORY_LIST_SELECT_FIELDS = [
-  "category.id",
-  "category.name",
-  "category.slug",
-  "category.description",
-  "category.isActive",
-  "category.createdAt",
-];
+export const CATEGORY_SELECT_FIELDS = {
+  DETAILS: [
+    "category.id",
+    "category.name",
+    "category.slug",
+    "category.description",
+    "category.isActive",
+    "category.createdBy",
+    "category.updatedBy",
+    "category.createdAt",
+    "category.updatedAt",
+  ],
+  LIST: [
+    "category.id",
+    "category.name",
+    "category.slug",
+    "category.description",
+    "category.isActive",
+    "category.createdAt",
+  ],
+  MAIN: ["category.id", "category.slug", "category.isActive", "category.name"],
+};

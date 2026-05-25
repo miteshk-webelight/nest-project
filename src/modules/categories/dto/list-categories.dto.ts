@@ -1,23 +1,18 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 
 import { Transform } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional, Max, MaxLength, Min } from "class-validator";
+import { IsBoolean, IsEnum, IsIn, IsOptional } from "class-validator";
 
-import { TrimString } from "src/decorators/trim-string.decorator";
+import { CommonSortByEnum, SortOrderEnum } from "src/constants/common.constants";
+import { PaginationQueryDto } from "src/dto/pagination-query.dto";
 
-export class ListCategoriesDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @TrimString()
-  @MaxLength(100)
-  search?: string;
-
+export class ListCategoriesDto extends PaginationQueryDto {
   @ApiPropertyOptional({
-    default: "createdAt",
+    default: CommonSortByEnum.CREATED_AT,
   })
   @IsOptional()
-  @IsIn(["createdAt", "name"])
-  sortBy?: string = "createdAt";
+  @IsIn([CommonSortByEnum.CREATED_AT, CommonSortByEnum.NAME])
+  sortBy?: string = CommonSortByEnum.CREATED_AT;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -26,29 +21,10 @@ export class ListCategoriesDto {
   isActive?: boolean;
 
   @ApiPropertyOptional({
-    enum: ["ASC", "DESC"],
-    default: "DESC",
+    enum: SortOrderEnum,
+    default: SortOrderEnum.DESC,
   })
   @IsOptional()
-  @IsIn(["ASC", "DESC"])
-  sortOrder?: "ASC" | "DESC" = "DESC";
-
-  @ApiPropertyOptional({
-    default: 1,
-  })
-  @IsOptional()
-  @Transform(({ value }) => Number(value))
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({
-    default: 10,
-  })
-  @IsOptional()
-  @Transform(({ value }) => Number(value))
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 10;
+  @IsEnum(SortOrderEnum)
+  sortOrder?: SortOrderEnum = SortOrderEnum.DESC;
 }

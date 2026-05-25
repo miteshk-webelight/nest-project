@@ -3,6 +3,8 @@ import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
 
+import { logger } from "src/services/logger.service";
+
 import { ApiTag } from "../../constants/api-tags.constants";
 import { RoleGuard } from "../../guards/role-guard";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
@@ -13,10 +15,10 @@ import { UserRoleEnum } from "../users/user.constants";
 
 import { SUCCESS_MESSAGES } from "./categories.constants";
 import { CategoriesService } from "./categories.service";
+import { CategoriesListResponse, CategoryResponse } from "./category.response";
 import { CreateCategoryDto } from "./dto/create-category.dto";
 import { ListCategoriesDto } from "./dto/list-categories.dto";
 import { UpdateCategoryDto, UpdateCategoryStatusDto } from "./dto/update-category.dto";
-import { CategoryResponse, CategoriesListResponse } from "./responses/category.response";
 
 import type { Request, Response } from "express";
 
@@ -33,7 +35,7 @@ export class CategoriesController {
     @Query() query: ListCategoriesDto,
   ): Promise<Response<CommonResponseType<CategoriesListResponse>>> {
     try {
-      const categories = await this.categoriesService.listActiveCategories(query);
+      const categories = await this.categoriesService.listCategories({ query, onlyActive: true });
 
       return responseUtils.success(res, {
         data: categories,
@@ -41,6 +43,7 @@ export class CategoriesController {
         transformWith: CategoriesListResponse,
       });
     } catch (error) {
+      logger.error("Error listing active categories:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -61,6 +64,7 @@ export class CategoriesController {
         transformWith: CategoryResponse,
       });
     } catch (error) {
+      logger.error(`Error fetching category with slug ${slug}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -83,6 +87,7 @@ export class CategoriesController {
         transformWith: CategoryResponse,
       });
     } catch (error) {
+      logger.error("Error creating category:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -103,6 +108,7 @@ export class CategoriesController {
         transformWith: CategoryResponse,
       });
     } catch (error) {
+      logger.error(`Error fetching category with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -118,7 +124,7 @@ export class CategoriesController {
     @Body() dto: UpdateCategoryDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.categoriesService.updateCategory(id, dto, req.user);
+      await this.categoriesService.updateCategory({ id, dto, admin: req.user });
 
       return responseUtils.success(res, {
         data: {
@@ -126,6 +132,7 @@ export class CategoriesController {
         },
       });
     } catch (error) {
+      logger.error(`Error updating category with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -147,6 +154,7 @@ export class CategoriesController {
         },
       });
     } catch (error) {
+      logger.error(`Error deleting category with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -162,7 +170,7 @@ export class CategoriesController {
     @Body() dto: UpdateCategoryStatusDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.categoriesService.updateCategoryStatus(id, dto, req.user);
+      await this.categoriesService.updateCategoryStatus({ id, dto, admin: req.user });
 
       return responseUtils.success(res, {
         data: {
@@ -172,6 +180,7 @@ export class CategoriesController {
         },
       });
     } catch (error) {
+      logger.error(`Error updating status for category with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -185,7 +194,7 @@ export class CategoriesController {
     @Query() query: ListCategoriesDto,
   ): Promise<Response<CommonResponseType<CategoriesListResponse>>> {
     try {
-      const categories = await this.categoriesService.listAllCategories(query);
+      const categories = await this.categoriesService.listCategories({ query });
 
       return responseUtils.success(res, {
         data: categories,
@@ -193,6 +202,7 @@ export class CategoriesController {
         transformWith: CategoriesListResponse,
       });
     } catch (error) {
+      logger.error("Error listing categories:", error);
       return responseUtils.error({ res, error });
     }
   }

@@ -57,3 +57,9 @@ export const USER_LIST_SELECT_FIELDS = [
   "user.role",
   "user.createdAt",
 ];
+
+export enum UserSortByEnum {
+  CREATED_AT = "createdAt",
+  FIRST_NAME = "firstName",
+  EMAIL = "email",
+}

@@ -1,25 +1,24 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
-import { Repository } from "typeorm";
+import { Repository, SelectQueryBuilder } from "typeorm";
 
-import { generateSlug, pagination, transformToInstance } from "../../utils/helper.utils";
+import { CommonSortByEnum, SortOrderEnum } from "src/constants/common.constants";
+import { handleServiceError } from "src/utils/service-error-handler";
+
+import { applyPagination, generateSlug } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
 import { DatabaseService } from "../database/database.service";
 import { RedisService } from "../redis/redis.service";
 import { UsersEntity } from "../users/entity/users.entity";
 
-import {
-  CATEGORY_CACHE_TTL,
-  CATEGORY_LIST_SELECT_FIELDS,
-  CATEGORY_SELECT_FIELDS,
-  ERROR_MESSAGES,
-} from "./categories.constants";
+import { CATEGORY_CACHE_TTL, CATEGORY_SELECT_FIELDS, ERROR_MESSAGES } from "./categories.constants";
+import { CategoryAdminActionParams } from "./category-service.types";
+import { CategoryEntity } from "./category.entity";
+import { CategoriesListResponse } from "./category.response";
 import { CreateCategoryDto } from "./dto/create-category.dto";
 import { ListCategoriesDto } from "./dto/list-categories.dto";
 import { UpdateCategoryDto, UpdateCategoryStatusDto } from "./dto/update-category.dto";
-import { CategoryEntity } from "./entity/category.entity";
-import { CategoryResponse, CategoriesListResponse } from "./responses/category.response";
 import {
   getCategoryBySlugCacheKey,
   getCategoryDetailsCacheKey,
@@ -48,23 +47,15 @@ export class CategoriesService {
     try {
       const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
 
+      const slug = generateSlug(dto.name);
+
       const existingCategory = await categoryRepository
         .createQueryBuilder("category")
-        .where("category.name ILIKE :name", { name: dto.name })
+        .where("category.name LIKE :name", { name: dto.name })
+        .orWhere("category.slug = :slug", { slug })
         .getOne();
 
       if (existingCategory) {
-        throw new ConflictException(ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS);
-      }
-
-      const slug = generateSlug(dto.name);
-
-      const existingSlug = await categoryRepository
-        .createQueryBuilder("category")
-        .where("category.slug = :slug", { slug })
-        .getOne();
-
-      if (existingSlug) {
         throw new ConflictException(ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS);
       }
 
@@ -72,8 +63,6 @@ export class CategoriesService {
         ...dto,
         slug,
         isActive: true,
-        createdBy: admin.id,
-        updatedBy: admin.id,
       });
 
       const savedCategory = await categoryRepository.save(category);
@@ -94,7 +83,7 @@ export class CategoriesService {
   private async findCategoryById(id: string): Promise<Partial<CategoryEntity>> {
     const category = await this.categoryRepository
       .createQueryBuilder("category")
-      .select(CATEGORY_SELECT_FIELDS)
+      .select(CATEGORY_SELECT_FIELDS.DETAILS)
       .where("category.id = :id", { id })
       .getOne();
 
@@ -106,47 +95,37 @@ export class CategoriesService {
   }
 
   async getCategoryById(id: string): Promise<Partial<CategoryEntity>> {
-    const cacheKey = getCategoryDetailsCacheKey(id);
-
-    const cachedCategory = await this.redisService.get(cacheKey);
-
-    if (cachedCategory) {
-      return JSON.parse(cachedCategory) as Partial<CategoryEntity>;
-    }
-
-    const category = await this.findCategoryById(id);
-
-    await this.redisService.set(cacheKey, JSON.stringify(category), CATEGORY_CACHE_TTL);
-
-    return category;
+    return this.redisService.getOrSet({
+      key: getCategoryDetailsCacheKey(id),
+      ttl: CATEGORY_CACHE_TTL,
+      fetcher: async () => this.findCategoryById(id),
+    });
   }
 
   async getCategoryBySlug(slug: string): Promise<Partial<CategoryEntity>> {
-    const cacheKey = getCategoryBySlugCacheKey(slug);
+    return this.redisService.getOrSet({
+      key: getCategoryBySlugCacheKey(slug),
+      ttl: CATEGORY_CACHE_TTL,
+      fetcher: async () => {
+        const category = await this.categoryRepository
+          .createQueryBuilder("category")
+          .select(CATEGORY_SELECT_FIELDS.DETAILS)
+          .where("category.slug = :slug", { slug })
+          .andWhere("category.isActive = :isActive", {
+            isActive: true,
+          })
+          .getOne();
 
-    const cachedCategory = await this.redisService.get(cacheKey);
+        if (!category) {
+          throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
+        }
 
-    if (cachedCategory) {
-      return JSON.parse(cachedCategory) as Partial<CategoryEntity>;
-    }
-
-    const category = await this.categoryRepository
-      .createQueryBuilder("category")
-      .select(CATEGORY_SELECT_FIELDS)
-      .where("category.slug = :slug", { slug })
-      .andWhere("category.isActive = :isActive", { isActive: true })
-      .getOne();
-
-    if (!category) {
-      throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
-    }
-
-    await this.redisService.set(cacheKey, JSON.stringify(category), CATEGORY_CACHE_TTL);
-
-    return category;
+        return category;
+      },
+    });
   }
 
-  async updateCategory(id: string, dto: UpdateCategoryDto, admin: UsersEntity): Promise<void> {
+  async updateCategory({ id, dto, admin }: CategoryAdminActionParams<UpdateCategoryDto>): Promise<void> {
     const queryRunner = await this.databaseService.createQueryRunner();
 
     try {
@@ -154,7 +133,7 @@ export class CategoriesService {
 
       const category = await categoryRepository
         .createQueryBuilder("category")
-        .select(["category.id", "category.name", "category.slug", "category.isActive"])
+        .select(CATEGORY_SELECT_FIELDS.MAIN)
         .where("category.id = :id", { id })
         .getOne();
 
@@ -165,36 +144,27 @@ export class CategoriesService {
       validateCategoryUpdatePayload(dto);
 
       if (dto.name) {
+        const newSlug = generateSlug(dto.name);
+
         const existingCategory = await categoryRepository
           .createQueryBuilder("category")
           .select(["category.id", "category.name"])
-          .where("category.name ILIKE :name", { name: dto.name })
+          .where("category.name LIKE :name", { name: dto.name })
           .andWhere("category.id != :id", { id })
+          .andWhere("category.slug = :slug", { slug: newSlug })
           .getOne();
 
         validateCategoryUniqueFields(dto, existingCategory);
 
-        const newSlug = generateSlug(dto.name);
-
-        const existingSlug = await categoryRepository
-          .createQueryBuilder("category")
-          .select(["category.id", "category.slug"])
-          .where("category.slug = :slug", { slug: newSlug })
-          .andWhere("category.id != :id", { id })
-          .getOne();
-
-        if (existingSlug) {
+        if (existingCategory) {
           throw new ConflictException(ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS);
         }
 
-        category.name = dto.name;
-        category.slug = newSlug;
+        Object.assign(category, { name: dto.name, slug: newSlug });
       }
       if (dto.description !== undefined) {
         category.description = dto.description;
       }
-
-      category.updatedBy = admin.id;
 
       await categoryRepository.save(category);
 
@@ -203,7 +173,7 @@ export class CategoriesService {
       await this.clearCategoryCache(category.id, category.slug);
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
-      throw error;
+      handleServiceError(error, "updateCategoryError");
     } finally {
       await this.databaseService.releaseQueryRunner(queryRunner);
     }
@@ -215,10 +185,11 @@ export class CategoriesService {
     try {
       const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
 
-      const category = await categoryRepository.findOne({
-        where: { id },
-        select: ["id", "slug"],
-      });
+      const category = await categoryRepository
+        .createQueryBuilder("category")
+        .select(["category.id"])
+        .where("category.id = :id", { id })
+        .getOne();
 
       if (!category) {
         throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
@@ -233,7 +204,7 @@ export class CategoriesService {
       await this.clearCategoryCache(category.id, category.slug);
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
-      throw error;
+      handleServiceError(error, "deleteCategoryError");
     } finally {
       await this.databaseService.releaseQueryRunner(queryRunner);
     }
@@ -245,7 +216,7 @@ export class CategoriesService {
     // If linked, throw ConflictException(ERROR_MESSAGES.CATEGORY_LINKED_WITH_PRODUCTS)
   }
 
-  async updateCategoryStatus(id: string, dto: UpdateCategoryStatusDto, admin: UsersEntity): Promise<void> {
+  async updateCategoryStatus({ id, dto, admin }: CategoryAdminActionParams<UpdateCategoryStatusDto>): Promise<void> {
     const queryRunner = await this.databaseService.createQueryRunner();
 
     try {
@@ -253,7 +224,7 @@ export class CategoriesService {
 
       const category = await categoryRepository
         .createQueryBuilder("category")
-        .select(["category.id", "category.slug", "category.isActive"])
+        .select(CATEGORY_SELECT_FIELDS.MAIN)
         .where("category.id = :id", { id })
         .getOne();
 
@@ -264,7 +235,6 @@ export class CategoriesService {
       validateCategoryActivationTransition(category.isActive, dto.isActive);
 
       category.isActive = dto.isActive;
-      category.updatedBy = admin.id;
 
       await categoryRepository.save(category);
 
@@ -273,78 +243,118 @@ export class CategoriesService {
       await this.clearCategoryCache(category.id, category.slug);
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
-      throw error;
+
+      handleServiceError(error, "createCategoryStatusUpdateError");
     } finally {
       await this.databaseService.releaseQueryRunner(queryRunner);
     }
   }
 
-  // Only for admin use, as it lists all categories including inactive ones.
-  async listAllCategories(query: ListCategoriesDto): Promise<CategoriesListResponse> {
-    const { page = 1, limit = 10, search = "", sortBy = "createdAt", sortOrder = "DESC", isActive } = query;
+  async listCategories({
+    query,
+    onlyActive = false,
+  }: {
+    query: ListCategoriesDto;
+    onlyActive?: boolean;
+  }): Promise<CategoriesListResponse> {
+    const {
+      page = 1,
+      limit = 10,
+      search = "",
+      sortBy = CommonSortByEnum.CREATED_AT,
+      sortOrder = SortOrderEnum.DESC,
+      isActive,
+      isPagination = true,
+    } = query;
 
-    const offset = pagination(page, limit);
+    const cacheParams = [page, limit, search, sortBy, sortOrder, isActive, onlyActive, isPagination].join("-");
 
-    const qb = this.categoryRepository.createQueryBuilder("category").select(CATEGORY_LIST_SELECT_FIELDS);
+    const cacheKey = getCategoryListCacheKey(cacheParams);
+
+    return this.redisService.getOrSet({
+      key: cacheKey,
+      ttl: CATEGORY_CACHE_TTL,
+      fetcher: async () => {
+        const qb = this.categoryRepository.createQueryBuilder("category").select(CATEGORY_SELECT_FIELDS.LIST);
+
+        this.applyCategoryFilters({
+          qb,
+          search,
+          onlyActive,
+          isActive,
+        });
+
+        qb.orderBy(`category.${sortBy}`, sortOrder);
+
+        applyPagination(qb, {
+          page,
+          limit,
+          isPagination,
+        });
+
+        return this.getCategoryListResponse({
+          qb,
+          page,
+          limit,
+          isPagination,
+        });
+      },
+    });
+  }
+
+  private applyCategoryFilters({
+    qb,
+    search,
+    onlyActive,
+    isActive,
+  }: {
+    qb: SelectQueryBuilder<CategoryEntity>;
+    search?: string;
+    onlyActive?: boolean;
+    isActive?: boolean;
+  }): void {
+    if (onlyActive) {
+      qb.where("category.isActive = :isActive", {
+        isActive: true,
+      });
+    } else if (typeof isActive === "boolean") {
+      qb.where("category.isActive = :isActive", {
+        isActive,
+      });
+    }
 
     if (search) {
-      qb.andWhere("(category.name ILIKE :search OR category.description ILIKE :search)", { search: `%${search}%` });
+      qb.andWhere("(category.name ILIKE :search OR category.description ILIKE :search)", {
+        search: `%${search}%`,
+      });
     }
+  }
 
-    if (isActive !== undefined) {
-      qb.andWhere("category.isActive = :isActive", { isActive });
+  private async getCategoryListResponse({
+    qb,
+    page,
+    limit,
+    isPagination,
+  }: {
+    qb: SelectQueryBuilder<CategoryEntity>;
+    page: number;
+    limit: number;
+    isPagination: boolean;
+  }): Promise<CategoriesListResponse> {
+    if (!isPagination) {
+      const data = await qb.getMany();
+
+      return {
+        data,
+      };
     }
-
-    qb.orderBy(`category.${sortBy}`, sortOrder);
-
-    qb.skip(offset).take(limit);
 
     const [data, total] = await qb.getManyAndCount();
 
     return {
-      data: transformToInstance(CategoryResponse, data) as CategoryResponse[],
+      data,
       meta: createPaginationMeta(page, limit, total),
     };
-  }
-
-  // Only lists active categories, used for public listing and selection in other modules.
-  async listActiveCategories(query: ListCategoriesDto): Promise<CategoriesListResponse> {
-    const { page = 1, limit = 10, search = "", sortBy = "createdAt", sortOrder = "DESC" } = query;
-
-    const offset = pagination(page, limit);
-
-    const cacheParams = `${page}-${limit}-${search}-${sortBy}-${sortOrder}`;
-    const cacheKey = getCategoryListCacheKey(cacheParams);
-
-    const cachedList = await this.redisService.get(cacheKey);
-
-    if (cachedList) {
-      return JSON.parse(cachedList) as CategoriesListResponse;
-    }
-
-    const qb = this.categoryRepository
-      .createQueryBuilder("category")
-      .select(CATEGORY_LIST_SELECT_FIELDS)
-      .where("category.isActive = :isActive", { isActive: true });
-
-    if (search) {
-      qb.andWhere("(category.name ILIKE :search OR category.description ILIKE :search)", { search: `%${search}%` });
-    }
-
-    qb.orderBy(`category.${sortBy}`, sortOrder);
-
-    qb.skip(offset).take(limit);
-
-    const [data, total] = await qb.getManyAndCount();
-
-    const response = {
-      data: transformToInstance(CategoryResponse, data) as CategoryResponse[],
-      meta: createPaginationMeta(page, limit, total),
-    };
-
-    await this.redisService.set(cacheKey, JSON.stringify(response), CATEGORY_CACHE_TTL);
-
-    return response;
   }
 
   private async clearCategoryCache(categoryId: string, slug: string): Promise<void> {
