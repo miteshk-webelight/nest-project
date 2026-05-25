@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 
 import { VendorStatus } from "src/decorators/vendor-status.decorator";
 import { VendorStatusGuard } from "src/guards/vendor-status.guard";
+import { logger } from "src/services/logger.service";
 
 import { ApiTag } from "../../constants/api-tags.constants";
 import { RoleGuard } from "../../guards/role-guard";
@@ -19,7 +20,7 @@ import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
 import { UpdateVendorStatusDto } from "./dto/update-vendor-status.dto";
 import { VendorStatusResponse } from "./responses/vendor-status.response";
 import { VendorProfileResponse } from "./responses/vendors.response";
-import { VendorStatusEnum, SUCCESS_MESSAGES } from "./vendors.constants";
+import { SUCCESS_MESSAGES, VendorStatusEnum } from "./vendors.constants";
 import { VendorsService } from "./vendors.service";
 
 import type { Request, Response } from "express";
@@ -50,6 +51,7 @@ export class VendorsController {
         status: StatusCodes.CREATED,
       });
     } catch (error) {
+      logger.error("Error registering as vendor:", error);
       return responseUtils.error({
         res,
         error,
@@ -76,6 +78,7 @@ export class VendorsController {
         },
       });
     } catch (error) {
+      logger.error(`Error updating vendor status for ID ${id}:`, error);
       return responseUtils.error({
         res,
         error,
@@ -96,8 +99,10 @@ export class VendorsController {
 
       return responseUtils.success(res, {
         data: vendor,
+        transformWith: VendorProfileResponse,
       });
     } catch (error) {
+      logger.error("Error fetching vendor profile:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -115,8 +120,10 @@ export class VendorsController {
 
       return responseUtils.success(res, {
         data: status,
+        transformWith: VendorStatusResponse,
       });
     } catch (error) {
+      logger.error("Error fetching vendor status:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -141,6 +148,7 @@ export class VendorsController {
         },
       });
     } catch (error) {
+      logger.error("Error updating vendor profile:", error);
       return responseUtils.error({ res, error });
     }
   }
@@ -161,6 +169,7 @@ export class VendorsController {
         },
       });
     } catch (error) {
+      logger.error(`Error deleting vendor with ID ${id}:`, error);
       return responseUtils.error({ res, error });
     }
   }

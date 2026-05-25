@@ -1,18 +1,14 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 
-import { Transform } from "class-transformer";
-import { IsBooleanString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from "class-validator";
+import { IsBooleanString, IsEnum, IsOptional } from "class-validator";
 
-import { VendorStatusEnum } from "../../../modules/vendors/vendors.constants";
-import { UserRoleEnum } from "../user.constants";
+import { SortOrderEnum } from "src/constants/common.constants";
+import { PaginationQueryDto } from "src/dto/pagination-query.dto";
 
-export class FindAllUsersDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(100)
-  search?: string;
+import { VendorStatusEnum } from "../../vendors/vendors.constants";
+import { UserRoleEnum, UserSortByEnum } from "../user.constants";
 
+export class FindAllUsersDto extends PaginationQueryDto {
   @ApiPropertyOptional({
     enum: UserRoleEnum,
   })
@@ -33,34 +29,18 @@ export class FindAllUsersDto {
   vendorStatus?: VendorStatusEnum;
 
   @ApiPropertyOptional({
-    default: "createdAt",
+    enum: SortOrderEnum,
+    default: SortOrderEnum.DESC,
   })
   @IsOptional()
-  @IsIn(["createdAt", "firstName", "email"])
-  sortBy?: string = "createdAt";
+  @IsEnum(SortOrderEnum)
+  sortOrder?: SortOrderEnum = SortOrderEnum.DESC;
 
   @ApiPropertyOptional({
-    enum: ["ASC", "DESC"],
-    default: "DESC",
+    enum: UserSortByEnum,
+    default: UserSortByEnum.CREATED_AT,
   })
   @IsOptional()
-  @IsIn(["ASC", "DESC"])
-  sortOrder?: "ASC" | "DESC" = "DESC";
-
-  @ApiPropertyOptional({
-    default: 1,
-  })
-  @Transform(({ value }) => Number(value))
-  @IsInt()
-  @Min(1)
-  page?: number = 1;
-
-  @ApiPropertyOptional({
-    default: 10,
-  })
-  @Transform(({ value }) => Number(value))
-  @IsInt()
-  @Min(1)
-  @Max(100)
-  limit?: number = 10;
+  @IsEnum(UserSortByEnum)
+  sortBy?: UserSortByEnum = UserSortByEnum.CREATED_AT;
 }

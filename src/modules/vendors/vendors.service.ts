@@ -1,9 +1,7 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
 import { Repository } from "typeorm";
-
-import { transformToInstance } from "src/utils/helper.utils";
 
 import { DatabaseService } from "../database/database.service";
 import { RedisService } from "../redis/redis.service";
@@ -12,7 +10,6 @@ import { UserRoleEnum } from "../users/user.constants";
 
 import { RegisterVendorDto } from "./dto/register-vendor.dto";
 import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
-import { VendorProfileResponse } from "./responses/vendors.response";
 import { getVendorProfileCacheKey, getVendorStatusCacheKey } from "./utils/vendor-cache.utils";
 import { validateVendorStatusTransition } from "./utils/vendor-status.utils";
 import { validateVendorProfileUpdatePayload, validateVendorUniqueFields } from "./utils/vendor-validation.utils";
@@ -164,54 +161,36 @@ export class VendorsService {
     return vendor;
   }
 
-  async getMyVendorProfile(user: UsersEntity): Promise<VendorProfileResponse> {
-    const cacheKey = getVendorProfileCacheKey(user.id);
-
-    const cachedVendor = await this.redisService.get(cacheKey);
-
-    if (cachedVendor) {
-      return JSON.parse(cachedVendor) as VendorProfileResponse;
-    }
-
-    const vendor = await this.findVendorByUserId(user.id);
-
-    const transformedVendor = transformToInstance(VendorProfileResponse, vendor) as VendorProfileResponse;
-
-    await this.redisService.set(cacheKey, JSON.stringify(transformedVendor), VENDOR_CACHE_TTL);
-
-    return transformedVendor;
+  async getMyVendorProfile(user: UsersEntity): Promise<VendorProfileEntity> {
+    return this.redisService.getOrSet({
+      key: getVendorProfileCacheKey(user.id),
+      ttl: VENDOR_CACHE_TTL,
+      fetcher: async () => this.findVendorByUserId(user.id),
+    });
   }
 
   async getMyVendorStatus(user: UsersEntity): Promise<{ status: VendorStatusEnum }> {
-    const cacheKey = getVendorStatusCacheKey(user.id);
+    return this.redisService.getOrSet({
+      key: getVendorStatusCacheKey(user.id),
+      ttl: VENDOR_CACHE_TTL,
+      fetcher: async () => {
+        const vendor = await this.vendorProfileRepository
+          .createQueryBuilder("vendor")
+          .select(VENDOR_STATUS_SELECT_FIELDS)
+          .where("vendor.userId = :userId", {
+            userId: user.id,
+          })
+          .getOne();
 
-    const cachedStatus = await this.redisService.get(cacheKey);
+        if (!vendor) {
+          throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
+        }
 
-    if (cachedStatus) {
-      return JSON.parse(cachedStatus) as {
-        status: VendorStatusEnum;
-      };
-    }
-
-    const vendor = await this.vendorProfileRepository
-      .createQueryBuilder("vendor")
-      .select(VENDOR_STATUS_SELECT_FIELDS)
-      .where("vendor.userId = :userId", {
-        userId: user.id,
-      })
-      .getOne();
-
-    if (!vendor) {
-      throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
-    }
-
-    const response = {
-      status: vendor.status,
-    };
-
-    await this.redisService.set(cacheKey, JSON.stringify(response), VENDOR_CACHE_TTL);
-
-    return response;
+        return {
+          status: vendor.status,
+        };
+      },
+    });
   }
 
   async updateMyVendorProfile(user: UsersEntity, dto: UpdateVendorProfileDto): Promise<void> {

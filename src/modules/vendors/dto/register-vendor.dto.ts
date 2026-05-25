@@ -4,7 +4,7 @@ import { Transform } from "class-transformer";
 import { IsEmail, IsNotEmpty, IsOptional, IsPhoneNumber, IsUrl, Matches, MaxLength, MinLength } from "class-validator";
 
 import { ERROR_MESSAGES } from "src/constants/app.constants";
-import { VALIDATION_REGEX } from "src/constants/validation.constants";
+import { VALIDATION_MESSAGES, VALIDATION_REGEX } from "src/constants/validation.constants";
 import { TrimString } from "src/decorators/trim-string.decorator";
 
 export class RegisterVendorDto {
@@ -13,7 +13,7 @@ export class RegisterVendorDto {
   @TrimString()
   @MinLength(2)
   @MaxLength(100)
-  @Matches(VALIDATION_REGEX.BUSINESS_NAME, { message: "Only letters, numbers, spaces, hyphens and apostrophes" })
+  @Matches(VALIDATION_REGEX.BUSINESS_NAME, { message: VALIDATION_MESSAGES.INVALID_BUSINESS_NAME })
   businessName: string;
 
   @ApiProperty()

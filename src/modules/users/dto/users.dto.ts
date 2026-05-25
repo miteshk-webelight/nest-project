@@ -6,7 +6,7 @@ import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsPhoneNumber, Matches, MaxLen
 import { TrimString } from "src/decorators/trim-string.decorator";
 
 import { ERROR_MESSAGES } from "../../../constants/app.constants";
-import { VALIDATION_REGEX } from "../../../constants/validation.constants";
+import { VALIDATION_MESSAGES, VALIDATION_REGEX } from "../../../constants/validation.constants";
 import { UserRoleEnum } from "../user.constants";
 
 export class CreateUserDto {
@@ -14,7 +14,7 @@ export class CreateUserDto {
   @IsNotEmpty()
   @TrimString()
   @MaxLength(50)
-  @Matches(VALIDATION_REGEX.NAME, { message: "Only letters, spaces, hyphens and apostrophes" })
+  @Matches(VALIDATION_REGEX.NAME, { message: VALIDATION_MESSAGES.INVALID_NAME })
   firstName: string;
 
   @ApiPropertyOptional()
@@ -42,7 +42,7 @@ export class CreateUserDto {
   @MinLength(8)
   @MaxLength(128)
   @Matches(VALIDATION_REGEX.PASSWORD, {
-    message: "Password must contain at least one uppercase letter, one lowercase letter, and one special character.",
+    message: VALIDATION_MESSAGES.INVALID_PASSWORD,
   })
   password: string;
 }

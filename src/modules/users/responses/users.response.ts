@@ -1,8 +1,8 @@
-import { Expose } from "class-transformer";
+import { Expose, Type } from "class-transformer";
 
+import { PaginationMetaResponse } from "../../../types/pagination.types";
 import { ApiPropertyWritable } from "../../swagger/swagger.writable.decorator";
 
-import type { PaginationMeta } from "../../../types/pagination.types";
 import type { UserRoleEnum } from "../user.constants";
 
 export class UsersResponse {
@@ -37,10 +37,11 @@ export class UsersResponse {
 
 export class UsersListResponse {
   @Expose()
-  @ApiPropertyWritable()
+  @Type(() => UsersResponse)
+  @ApiPropertyWritable({ type: () => UsersResponse, isArray: true })
   data: UsersResponse[];
 
   @Expose()
-  @ApiPropertyWritable()
-  meta: PaginationMeta;
+  @ApiPropertyWritable({ type: () => PaginationMetaResponse })
+  meta: PaginationMetaResponse;
 }
