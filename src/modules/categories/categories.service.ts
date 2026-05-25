@@ -41,7 +41,7 @@ export class CategoriesService {
     private readonly databaseService: DatabaseService,
   ) {}
 
-  async createCategory(dto: CreateCategoryDto, admin: UsersEntity): Promise<CategoryEntity> {
+  async createCategory(dto: CreateCategoryDto, admin: UsersEntity): Promise<CategoryEntity | void> {
     const queryRunner = await this.databaseService.createQueryRunner();
 
     try {
@@ -74,7 +74,7 @@ export class CategoriesService {
       return savedCategory;
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
-      throw error;
+      handleServiceError(error, "createCategoryError");
     } finally {
       await this.databaseService.releaseQueryRunner(queryRunner);
     }

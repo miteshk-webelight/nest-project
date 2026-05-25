@@ -1,8 +1,8 @@
 import { Expose, Type } from "class-transformer";
 
-import { ApiPropertyWritable } from "../swagger/swagger.writable.decorator";
+import { PaginationMetaResponse } from "src/types/pagination.types";
 
-import type { PaginationMeta } from "../../types/pagination.types";
+import { ApiPropertyWritable } from "../swagger/swagger.writable.decorator";
 
 export class CategoryResponse {
   @Expose()
@@ -37,10 +37,10 @@ export class CategoryResponse {
 export class CategoriesListResponse {
   @Expose()
   @Type(() => CategoryResponse)
-  @ApiPropertyWritable()
+  @ApiPropertyWritable({ type: () => CategoryResponse, isArray: true })
   data: CategoryResponse[];
 
   @Expose()
-  @ApiPropertyWritable()
-  meta?: PaginationMeta;
+  @ApiPropertyWritable({ type: () => PaginationMetaResponse })
+  meta?: PaginationMetaResponse;
 }
