@@ -13,4 +13,5 @@ export enum ApiTag {
   Download = "Download",
   Vendors = "Vendors",
   Categories = "Categories",
+  Products = "Products",
 }
