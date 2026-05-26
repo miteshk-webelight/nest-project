@@ -60,12 +60,12 @@ export class ProductEntity extends BaseEntity {
   isActive: boolean;
 
   @Column({ nullable: true })
-  approvedBy?: string;
+  reviewedBy?: string;
 
   @ManyToOne(() => UsersEntity)
-  @JoinColumn({ name: "approvedBy" })
-  approver?: Relation<UsersEntity>;
+  @JoinColumn({ name: "reviewedBy" })
+  reviewer?: Relation<UsersEntity>;
 
   @Column({ nullable: true, type: "timestamp" })
-  approvedAt?: Date;
+  reviewedAt?: Date;
 }
