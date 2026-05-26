@@ -19,3 +19,6 @@ export const SUCCESS_MESSAGES = {
 export const MEDIA_SELECT_FIELDS = {
   MEDIA_ID: ["media.id"],
 };
+export enum MediaModuleEnum {
+  PRODUCT = "PRODUCT",
+}

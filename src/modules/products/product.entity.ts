@@ -1,8 +1,7 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, type Relation } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, type Relation } from "typeorm";
 
 import { CategoryEntity } from "../categories/category.entity";
 import { BaseEntity } from "../database/base-entity";
-import { MediaEntity } from "../media/media.entity";
 import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 
@@ -47,9 +46,6 @@ export class ProductEntity extends BaseEntity {
 
   @Column({ type: "decimal", precision: 10, scale: 2, nullable: true })
   discountPrice?: number;
-
-  @OneToMany(() => MediaEntity, (media) => media.product)
-  media: Relation<MediaEntity[]>;
 
   @Column({ default: 0 })
   stock: number;

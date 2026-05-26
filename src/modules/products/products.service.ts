@@ -5,6 +5,7 @@ import { handleServiceError } from "src/utils/service-error-handler";
 import { generateSlug } from "../../utils/helper.utils";
 import { CategoryEntity } from "../categories/category.entity";
 import { DatabaseService } from "../database/database.service";
+import { MediaModuleEnum } from "../media/media.constants";
 import { MediaService } from "../media/media.service";
 import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
@@ -12,6 +13,7 @@ import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
 import { ProductEntity } from "./product.entity";
+import { ProductWithMedia } from "./product.types";
 import { ERROR_MESSAGES, PRODUCT_SELECT_FIELDS, ProductStatusEnum } from "./products.constants";
 import { validateProductPrice, validateSkuUniqueness } from "./utils/product-validation.utils";
 
@@ -59,7 +61,7 @@ export class ProductsService {
     return vendorProfile.id;
   }
 
-  async createProduct(dto: CreateProductDto, user: UsersEntity): Promise<ProductEntity | void> {
+  async createProduct(dto: CreateProductDto, user: UsersEntity): Promise<ProductWithMedia | void> {
     await this.validateCategoryExistsAndActive(dto.categoryId);
 
     validateProductPrice(dto.price, dto.discountPrice);
@@ -100,10 +102,11 @@ export class ProductsService {
 
       const savedProduct = await productRepository.save(product);
 
-      await this.mediaService.attachMediaToProduct(mediaIds, savedProduct.id, queryRunner);
+      await this.mediaService.attachMediaToRecord(mediaIds, MediaModuleEnum.PRODUCT, savedProduct.id, queryRunner);
       await this.databaseService.commitTransaction(queryRunner);
+      const media = await this.mediaService.getMediaByRecord(MediaModuleEnum.PRODUCT, savedProduct.id);
 
-      return savedProduct;
+      return { ...savedProduct, media };
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
       handleServiceError(error, "createProduct");

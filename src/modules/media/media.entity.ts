@@ -1,7 +1,6 @@
-import { Column, Entity, Index, JoinColumn, ManyToOne, type Relation } from "typeorm";
+import { Column, Entity, Index } from "typeorm";
 
 import { BaseEntity } from "../database/base-entity";
-import { ProductEntity } from "../products/product.entity";
 
 @Entity("Media")
 @Index(["filePath"], { unique: true })
@@ -24,12 +23,8 @@ export class MediaEntity extends BaseEntity {
   filePath: string;
 
   @Column({ nullable: true })
-  productId?: string;
+  module?: string;
 
-  @ManyToOne(() => ProductEntity, (product) => product.media, {
-    onDelete: "CASCADE",
-    nullable: true,
-  })
-  @JoinColumn({ name: "productId" })
-  product?: Relation<ProductEntity>;
+  @Column({ nullable: true })
+  recordId?: string;
 }

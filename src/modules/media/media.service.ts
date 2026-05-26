@@ -4,7 +4,7 @@ import cloudinary from "../../config/cloudinary.config";
 import { handleServiceError } from "../../utils/service-error-handler";
 import { DatabaseService } from "../database/database.service";
 
-import { ERROR_MESSAGES, MEDIA_CONSTANTS, MEDIA_SELECT_FIELDS } from "./media.constants";
+import { ERROR_MESSAGES, MEDIA_CONSTANTS, MEDIA_SELECT_FIELDS, MediaModuleEnum } from "./media.constants";
 import { MediaEntity } from "./media.entity";
 
 import type { UploadApiResponse } from "cloudinary";
@@ -114,12 +114,11 @@ export class MediaService {
 
     const media = await mediaRepository
       .createQueryBuilder("media")
-      .setLock("pessimistic_write")
       .select(MEDIA_SELECT_FIELDS.MEDIA_ID)
       .where("media.id IN (:...mediaIds)", {
         mediaIds,
       })
-      .andWhere("media.productId IS NULL")
+      .andWhere("media.recordId IS NULL")
       .getMany();
 
     if (media.length !== mediaIds.length) {
@@ -127,18 +126,38 @@ export class MediaService {
     }
   }
 
-  async attachMediaToProduct(mediaIds: string[], productId: string, queryRunner: QueryRunner): Promise<void> {
+  async attachMediaToRecord(
+    mediaIds: string[],
+    module: MediaModuleEnum,
+    recordId: string,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
     const mediaRepository = queryRunner.manager.getRepository(MediaEntity);
 
     await mediaRepository
       .createQueryBuilder()
       .update(MediaEntity)
       .set({
-        productId,
+        module,
+        recordId,
       })
       .where("id IN (:...mediaIds)", {
         mediaIds,
       })
       .execute();
+  }
+
+  async getMediaByRecord(module: MediaModuleEnum, recordId: string): Promise<MediaEntity[]> {
+    const mediaRepository = this.databaseService.getRepository(MediaEntity);
+
+    return await mediaRepository
+      .createQueryBuilder("media")
+      .where("media.module = :module", {
+        module,
+      })
+      .andWhere("media.recordId = :recordId", {
+        recordId,
+      })
+      .getMany();
   }
 }
