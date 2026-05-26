@@ -37,6 +37,7 @@ export const ERROR_MESSAGES = {
   INVALID_IMAGES_COUNT: "Product must have between 1 and 5 images",
   CATEGORY_LINKED_WITH_PRODUCTS: "Category cannot be deleted because it contains products",
   VENDOR_PROFILE_NOT_FOUND: "Vendor profile not found for the user",
+  INVALID_PRODUCT_STATUS_TRANSITION: "Invalid product status transition",
 };
 
 export const SUCCESS_MESSAGES = {
@@ -49,6 +50,7 @@ export const SUCCESS_MESSAGES = {
   PRODUCT_SUSPENDED_SUCCESS: "Product suspended successfully",
   PRODUCT_ACTIVATED_SUCCESS: "Product activated successfully",
   PRODUCT_DEACTIVATED_SUCCESS: "Product deactivated successfully",
+  PRODUCT_APPROVAL_REQUEST_SUBMITTED_SUCCESS: "Product approval request submitted successfully",
 };
 
 export const PRODUCT_SELECT_FIELDS = {
@@ -62,6 +64,7 @@ export const PRODUCT_SELECT_FIELDS = {
     "product.stock",
     "product.status",
   ],
+  STATUS: ["product.id", "product.status"],
   FULL: [
     "product.id",
     "product.name",

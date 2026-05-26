@@ -2,14 +2,14 @@ import { BadRequestException, ConflictException } from "@nestjs/common";
 
 import { ERROR_MESSAGES, ProductStatusEnum } from "../products.constants";
 
-import type { UpdateProductDto } from "../dto/update-product.dto";
 import type { ProductEntity } from "../product.entity";
 
-export function validateProductUpdatePayload(dto: UpdateProductDto): void {
-  if (Object.keys(dto).length === 0) {
-    throw new BadRequestException(ERROR_MESSAGES.INVALID_PRODUCT_UPDATE_PAYLOAD);
-  }
-}
+// After update product endpoint
+// export function validateProductUpdatePayload(dto: UpdateProductDto): void {
+//   if (Object.keys(dto).length === 0) {
+//     throw new BadRequestException(ERROR_MESSAGES.INVALID_PRODUCT_UPDATE_PAYLOAD);
+//   }
+// }
 
 export function validateProductPrice(price: number, discountPrice?: number): void {
   if (discountPrice && discountPrice >= price) {
@@ -29,15 +29,16 @@ export function validateProductStatusTransition(currentStatus: ProductStatusEnum
   const allowedTransitions = validTransitions[currentStatus];
 
   if (!allowedTransitions.includes(newStatus)) {
-    throw new ConflictException(ERROR_MESSAGES.PRODUCT_CANNOT_BE_MODIFIED);
+    throw new ConflictException(ERROR_MESSAGES.INVALID_PRODUCT_STATUS_TRANSITION);
   }
 }
 
-export function requiresNewApproval(dto: UpdateProductDto): boolean {
-  const fieldsRequiringApproval = ["name", "description", "images", "categoryId"];
+// After update product endpoint
+// export function requiresNewApproval(dto: UpdateProductDto): boolean {
+//   const fieldsRequiringApproval = ["name", "description", "categoryId"];
 
-  return fieldsRequiringApproval.some((field) => dto[field] !== undefined);
-}
+//   return fieldsRequiringApproval.some((field) => dto[field] !== undefined);
+// }
 
 export function validateSkuUniqueness(existingProduct: ProductEntity | null): void {
   if (existingProduct) {

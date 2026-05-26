@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 
+import { QueryRunner } from "typeorm";
+
 import { handleServiceError } from "src/utils/service-error-handler";
 
 import { generateSlug } from "../../utils/helper.utils";
@@ -9,13 +11,16 @@ import { MediaModuleEnum } from "../media/media.constants";
 import { MediaService } from "../media/media.service";
 import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
-import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
 import { ProductEntity } from "./product.entity";
 import { ProductWithMedia } from "./product.types";
 import { ERROR_MESSAGES, PRODUCT_SELECT_FIELDS, ProductStatusEnum } from "./products.constants";
-import { validateProductPrice, validateSkuUniqueness } from "./utils/product-validation.utils";
+import {
+  validateProductPrice,
+  validateProductStatusTransition,
+  validateSkuUniqueness,
+} from "./utils/product-validation.utils";
 
 @Injectable()
 export class ProductsService {
@@ -42,29 +47,14 @@ export class ProductsService {
     }
   }
 
-  private async getVendorProfileId(userId: string): Promise<string> {
-    const vendorRepository = this.databaseService.getRepository(VendorProfileEntity);
-
-    const vendorProfile = await vendorRepository
-      .createQueryBuilder("vendor")
-      .select(PRODUCT_SELECT_FIELDS.VENDOR_ID)
-      .where("vendor.userId = :userId", { userId })
-      .andWhere("vendor.status = :status", {
-        status: VendorStatusEnum.APPROVED,
-      })
-      .getOne();
-
-    if (!vendorProfile) {
-      throw new NotFoundException(ERROR_MESSAGES.VENDOR_PROFILE_NOT_FOUND);
-    }
-
-    return vendorProfile.id;
-  }
-
-  async createProduct(dto: CreateProductDto, user: UsersEntity): Promise<ProductWithMedia | void> {
+  async createProduct(dto: CreateProductDto, vendorProfile?: VendorProfileEntity): Promise<ProductWithMedia | void> {
     await this.validateCategoryExistsAndActive(dto.categoryId);
 
     validateProductPrice(dto.price, dto.discountPrice);
+
+    if (!vendorProfile) {
+      throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+    }
 
     const queryRunner = await this.databaseService.createQueryRunner();
 
@@ -73,7 +63,7 @@ export class ProductsService {
     try {
       const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
-      const vendorId = await this.getVendorProfileId(user.id);
+      const vendorId = vendorProfile.id;
 
       const existingSku = await productRepository
         .createQueryBuilder("product")
@@ -110,6 +100,88 @@ export class ProductsService {
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
       handleServiceError(error, "createProduct");
+    } finally {
+      await this.databaseService.releaseQueryRunner(queryRunner);
+    }
+  }
+
+  private async getProductById(
+    productId: string,
+    selectFields: string[],
+    queryRunner: QueryRunner,
+    vendorId?: string,
+  ): Promise<ProductEntity | null> {
+    const productRepository = queryRunner.manager.getRepository(ProductEntity);
+
+    const query = productRepository
+      .createQueryBuilder("product")
+      .select(selectFields)
+      .where("product.id = :productId", { productId });
+
+    if (vendorId) {
+      query.andWhere("product.vendorId = :vendorId", { vendorId });
+    }
+
+    return await query.getOne();
+  }
+
+  async submitProductApprovalRequest(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
+    const queryRunner = await this.databaseService.createQueryRunner();
+
+    try {
+      const productRepository = queryRunner.manager.getRepository(ProductEntity);
+
+      if (!vendorProfile) {
+        throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+      }
+
+      const vendorId = vendorProfile.id;
+
+      const product = await this.getProductById(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner, vendorId);
+
+      if (!product) {
+        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+      }
+
+      if (product.status !== ProductStatusEnum.DRAFT) {
+        throw new BadRequestException(ERROR_MESSAGES.INVALID_PRODUCT_STATUS_TRANSITION);
+      }
+
+      product.status = ProductStatusEnum.PENDING;
+
+      await productRepository.save(product);
+      await this.databaseService.commitTransaction(queryRunner);
+    } catch (error) {
+      await this.databaseService.rollbackTransaction(queryRunner);
+      handleServiceError(error, "submitProductApprovalRequest");
+    } finally {
+      await this.databaseService.releaseQueryRunner(queryRunner);
+    }
+  }
+
+  async updateProductStatus(productId: string, status: ProductStatusEnum, user: UsersEntity): Promise<void> {
+    const queryRunner = await this.databaseService.createQueryRunner();
+
+    try {
+      const productRepository = queryRunner.manager.getRepository(ProductEntity);
+
+      const product = await this.getProductById(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner);
+
+      if (!product) {
+        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+      }
+
+      validateProductStatusTransition(product.status, status);
+
+      product.status = status;
+      product.reviewedBy = user.id;
+      product.reviewedAt = new Date();
+
+      await productRepository.save(product);
+      await this.databaseService.commitTransaction(queryRunner);
+    } catch (error) {
+      await this.databaseService.rollbackTransaction(queryRunner);
+      handleServiceError(error, "updateProductStatus");
     } finally {
       await this.databaseService.releaseQueryRunner(queryRunner);
     }
