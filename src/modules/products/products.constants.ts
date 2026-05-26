@@ -50,3 +50,33 @@ export const SUCCESS_MESSAGES = {
   PRODUCT_ACTIVATED_SUCCESS: "Product activated successfully",
   PRODUCT_DEACTIVATED_SUCCESS: "Product deactivated successfully",
 };
+
+export const PRODUCT_SELECT_FIELDS = {
+  ID: ["product.id"],
+  BASIC: [
+    "product.id",
+    "product.name",
+    "product.sku",
+    "product.price",
+    "product.discountPrice",
+    "product.stock",
+    "product.status",
+  ],
+  FULL: [
+    "product.id",
+    "product.name",
+    "product.sku",
+    "product.description",
+    "product.price",
+    "product.discountPrice",
+    "product.stock",
+    "product.status",
+    "product.images",
+    "product.createdAt",
+    "product.updatedAt",
+  ],
+  CATEGORY: ["category.id", "category.name", "category.isActive"],
+  VENDOR_ID: ["vendor.id"],
+  VENDOR_PROFILE: ["vendor.id", "vendor.userId", "vendor.status"],
+  PRODUCT_ID: ["product.id"],
+};

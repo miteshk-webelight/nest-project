@@ -9,7 +9,6 @@ import {
   IsNumber,
   IsOptional,
   IsString,
-  IsUrl,
   Matches,
   Max,
   MaxLength,
@@ -38,6 +37,7 @@ export class CreateProductDto {
 
   @ApiProperty()
   @IsNotEmpty()
+  @TrimString()
   categoryId: string;
 
   @ApiPropertyOptional()
@@ -65,8 +65,7 @@ export class CreateProductDto {
   @ArrayMinSize(1)
   @ArrayMaxSize(5)
   @IsString({ each: true })
-  @IsUrl({}, { each: true })
-  images: string[];
+  mediaIds: string[];
 
   @ApiProperty()
   @IsNotEmpty()

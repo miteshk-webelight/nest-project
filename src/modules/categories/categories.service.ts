@@ -10,6 +10,7 @@ import { applyPagination, generateSlug } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
 import { DatabaseService } from "../database/database.service";
 import { ProductEntity } from "../products/product.entity";
+import { PRODUCT_SELECT_FIELDS } from "../products/products.constants";
 import { RedisService } from "../redis/redis.service";
 import { UsersEntity } from "../users/entity/users.entity";
 
@@ -217,7 +218,7 @@ export class CategoriesService {
   private async validateCategoryDeletion(categoryId: string): Promise<void> {
     const productCount = await this.productRepository
       .createQueryBuilder("product")
-      .select(["product.id"])
+      .select(PRODUCT_SELECT_FIELDS.ID)
       .where("product.categoryId = :categoryId", { categoryId })
       .getCount();
 

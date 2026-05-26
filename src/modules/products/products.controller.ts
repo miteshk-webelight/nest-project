@@ -15,8 +15,8 @@ import { UserRoleEnum } from "../users/user.constants";
 import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
+import { ProductResponse } from "./product.response";
 import { ProductsService } from "./products.service";
-import { ProductResponse } from "./responses/product.response";
 
 import type { Request, Response } from "express";
 

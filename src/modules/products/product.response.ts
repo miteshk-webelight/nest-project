@@ -1,8 +1,12 @@
+import { OmitType } from "@nestjs/swagger";
+
 import { Expose, Type } from "class-transformer";
 
-import { PaginationMetaResponse } from "../../../types/pagination.types";
-import { ApiPropertyWritable } from "../../swagger/swagger.writable.decorator";
-import { ProductStatusEnum } from "../products.constants";
+import { PaginationMetaResponse } from "../../types/pagination.types";
+import { MediaResponse } from "../media/media.response";
+import { ApiPropertyWritable } from "../swagger/swagger.writable.decorator";
+
+import { ProductStatusEnum } from "./products.constants";
 
 export class ProductResponse {
   @Expose()
@@ -30,7 +34,7 @@ export class ProductResponse {
   sku: string;
 
   @Expose()
-  @ApiPropertyWritable()
+  @ApiPropertyWritable({ nullable: true })
   description?: string;
 
   @Expose()
@@ -38,19 +42,24 @@ export class ProductResponse {
   price: number;
 
   @Expose()
-  @ApiPropertyWritable()
+  @ApiPropertyWritable({ nullable: true })
   discountPrice?: number;
 
   @Expose()
-  @ApiPropertyWritable()
-  images: string[];
+  @Type(() => MediaResponse)
+  @ApiPropertyWritable({ type: () => MediaResponse, isArray: true })
+  media: MediaResponse[];
 
   @Expose()
   @ApiPropertyWritable()
   stock: number;
 
   @Expose()
-  @ApiPropertyWritable()
+  @Type(() => String)
+  @ApiPropertyWritable({
+    type: String,
+    enum: ProductStatusEnum,
+  })
   status: ProductStatusEnum;
 
   @Expose()
@@ -58,70 +67,39 @@ export class ProductResponse {
   isActive: boolean;
 
   @Expose()
-  @ApiPropertyWritable()
+  @ApiPropertyWritable({ nullable: true })
   approvedBy?: string;
 
   @Expose()
-  @ApiPropertyWritable()
+  @Type(() => Date)
+  @ApiPropertyWritable({ nullable: true, type: Date })
   approvedAt?: Date;
 
   @Expose()
-  @ApiPropertyWritable()
+  @Type(() => Date)
+  @ApiPropertyWritable({
+    type: Date,
+  })
   createdAt: Date;
 
   @Expose()
-  @ApiPropertyWritable()
+  @Type(() => Date)
+  @ApiPropertyWritable({
+    type: Date,
+  })
   updatedAt: Date;
 }
 
-export class ProductPublicResponse {
-  @Expose()
-  @ApiPropertyWritable()
-  id: string;
-
-  @Expose()
-  @ApiPropertyWritable()
-  vendorId: string;
-
-  @Expose()
-  @ApiPropertyWritable()
-  categoryId: string;
-
-  @Expose()
-  @ApiPropertyWritable()
-  name: string;
-
-  @Expose()
-  @ApiPropertyWritable()
-  slug: string;
-
-  @Expose()
-  @ApiPropertyWritable()
-  description?: string;
-
-  @Expose()
-  @ApiPropertyWritable()
-  price: number;
-
-  @Expose()
-  @ApiPropertyWritable()
-  discountPrice?: number;
-
-  @Expose()
-  @ApiPropertyWritable()
-  images: string[];
-
-  @Expose()
-  @ApiPropertyWritable()
-  stock: number;
-
+export class ProductPublicResponse extends OmitType(ProductResponse, [
+  "sku",
+  "status",
+  "approvedBy",
+  "approvedAt",
+  "updatedAt",
+] as const) {
   @Expose()
   @ApiPropertyWritable()
   isOutOfStock: boolean;
-
-  @Expose()
-  @ApiPropertyWritable()
-  createdAt: Date;
 }
 
 export class ProductListResponse {
@@ -131,6 +109,7 @@ export class ProductListResponse {
   data: ProductResponse[];
 
   @Expose()
+  @Type(() => PaginationMetaResponse)
   @ApiPropertyWritable({
     type: PaginationMetaResponse,
   })
@@ -144,6 +123,7 @@ export class ProductPublicListResponse {
   data: ProductPublicResponse[];
 
   @Expose()
+  @Type(() => PaginationMetaResponse)
   @ApiPropertyWritable({
     type: PaginationMetaResponse,
   })

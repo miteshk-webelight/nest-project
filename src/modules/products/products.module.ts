@@ -3,6 +3,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 
 import { CategoryEntity } from "../categories/category.entity";
 import { DatabaseModule } from "../database/database.module";
+import { MediaModule } from "../media/media.module";
 import { RedisModule } from "../redis/redisModule";
 import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
@@ -16,6 +17,7 @@ import { ProductsService } from "./products.service";
     TypeOrmModule.forFeature([ProductEntity, CategoryEntity, UsersEntity, VendorProfileEntity]),
     RedisModule,
     DatabaseModule,
+    MediaModule,
   ],
   controllers: [ProductsController],
   providers: [ProductsService],

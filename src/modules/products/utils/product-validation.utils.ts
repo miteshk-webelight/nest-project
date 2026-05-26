@@ -12,24 +12,8 @@ export function validateProductUpdatePayload(dto: UpdateProductDto): void {
 }
 
 export function validateProductPrice(price: number, discountPrice?: number): void {
-  if (price <= 0) {
-    throw new BadRequestException(ERROR_MESSAGES.INVALID_PRICE_VALUE);
-  }
-
   if (discountPrice && discountPrice >= price) {
     throw new BadRequestException(ERROR_MESSAGES.INVALID_DISCOUNT_PRICE);
-  }
-}
-
-export function validateProductStock(stock: number): void {
-  if (stock < 0) {
-    throw new BadRequestException(ERROR_MESSAGES.INVALID_STOCK_VALUE);
-  }
-}
-
-export function validateProductImages(images: string[]): void {
-  if (images.length < 1 || images.length > 5) {
-    throw new BadRequestException(ERROR_MESSAGES.INVALID_IMAGES_COUNT);
   }
 }
 
@@ -45,12 +29,6 @@ export function validateProductStatusTransition(currentStatus: ProductStatusEnum
   const allowedTransitions = validTransitions[currentStatus];
 
   if (!allowedTransitions.includes(newStatus)) {
-    throw new ConflictException(ERROR_MESSAGES.PRODUCT_CANNOT_BE_MODIFIED);
-  }
-}
-
-export function validateProductModificationAllowed(status: ProductStatusEnum): void {
-  if (status === ProductStatusEnum.SUSPENDED) {
     throw new ConflictException(ERROR_MESSAGES.PRODUCT_CANNOT_BE_MODIFIED);
   }
 }

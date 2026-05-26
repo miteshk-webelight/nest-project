@@ -1,46 +1,33 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-
-import { Repository } from "typeorm";
 
 import { handleServiceError } from "src/utils/service-error-handler";
 
 import { generateSlug } from "../../utils/helper.utils";
 import { CategoryEntity } from "../categories/category.entity";
 import { DatabaseService } from "../database/database.service";
+import { MediaService } from "../media/media.service";
 import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
 import { ProductEntity } from "./product.entity";
-import { ERROR_MESSAGES, ProductStatusEnum } from "./products.constants";
-import {
-  validateProductImages,
-  validateProductPrice,
-  validateProductStock,
-  validateSkuUniqueness,
-} from "./utils/product-validation.utils";
+import { ERROR_MESSAGES, PRODUCT_SELECT_FIELDS, ProductStatusEnum } from "./products.constants";
+import { validateProductPrice, validateSkuUniqueness } from "./utils/product-validation.utils";
 
 @Injectable()
 export class ProductsService {
   constructor(
-    @InjectRepository(ProductEntity)
-    private readonly productRepository: Repository<ProductEntity>,
-
-    @InjectRepository(CategoryEntity)
-    private readonly categoryRepository: Repository<CategoryEntity>,
-
-    @InjectRepository(VendorProfileEntity)
-    private readonly vendorProfileRepository: Repository<VendorProfileEntity>,
-
     private readonly databaseService: DatabaseService,
+    private readonly mediaService: MediaService,
   ) {}
 
   private async validateCategoryExistsAndActive(categoryId: string): Promise<void> {
-    const category = await this.categoryRepository
+    const categoryRepository = this.databaseService.getRepository(CategoryEntity);
+
+    const category = await categoryRepository
       .createQueryBuilder("category")
-      .select(["category.id", "category.isActive"])
+      .select(PRODUCT_SELECT_FIELDS.CATEGORY)
       .where("category.id = :categoryId", { categoryId })
       .getOne();
 
@@ -54,9 +41,11 @@ export class ProductsService {
   }
 
   private async getVendorProfileId(userId: string): Promise<string> {
-    const vendorProfile = await this.vendorProfileRepository
+    const vendorRepository = this.databaseService.getRepository(VendorProfileEntity);
+
+    const vendorProfile = await vendorRepository
       .createQueryBuilder("vendor")
-      .select(["vendor.id"])
+      .select(PRODUCT_SELECT_FIELDS.VENDOR_ID)
       .where("vendor.userId = :userId", { userId })
       .andWhere("vendor.status = :status", {
         status: VendorStatusEnum.APPROVED,
@@ -74,10 +63,10 @@ export class ProductsService {
     await this.validateCategoryExistsAndActive(dto.categoryId);
 
     validateProductPrice(dto.price, dto.discountPrice);
-    validateProductStock(dto.stock);
-    validateProductImages(dto.images);
 
     const queryRunner = await this.databaseService.createQueryRunner();
+
+    await this.mediaService.validateMediaIds(dto.mediaIds, queryRunner);
 
     try {
       const productRepository = queryRunner.manager.getRepository(ProductEntity);
@@ -86,7 +75,7 @@ export class ProductsService {
 
       const existingSku = await productRepository
         .createQueryBuilder("product")
-        .select(["product.id"])
+        .select(PRODUCT_SELECT_FIELDS.PRODUCT_ID)
         .where("product.vendorId = :vendorId", {
           vendorId,
         })
@@ -99,8 +88,10 @@ export class ProductsService {
 
       const slug = generateSlug(dto.name, true);
 
+      const { mediaIds, ...productData } = dto;
+
       const product = productRepository.create({
-        ...dto,
+        ...productData,
         vendorId,
         slug,
         status: ProductStatusEnum.DRAFT,
@@ -109,6 +100,7 @@ export class ProductsService {
 
       const savedProduct = await productRepository.save(product);
 
+      await this.mediaService.attachMediaToProduct(mediaIds, savedProduct.id, queryRunner);
       await this.databaseService.commitTransaction(queryRunner);
 
       return savedProduct;

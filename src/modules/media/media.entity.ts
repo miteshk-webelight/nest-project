@@ -1,6 +1,7 @@
-import { Column, Entity, DeleteDateColumn, Index } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, type Relation } from "typeorm";
 
 import { BaseEntity } from "../database/base-entity";
+import { ProductEntity } from "../products/product.entity";
 
 @Entity("Media")
 @Index(["filePath"], { unique: true })
@@ -14,7 +15,7 @@ export class MediaEntity extends BaseEntity {
   filename: string;
 
   @Column()
-  fileType: string;
+  mimeType: string;
 
   @Column()
   size: number;
@@ -22,9 +23,13 @@ export class MediaEntity extends BaseEntity {
   @Column()
   filePath: string;
 
-  @Column()
-  module: string;
+  @Column({ nullable: true })
+  productId?: string;
 
-  @Column()
-  recordId: string;
+  @ManyToOne(() => ProductEntity, (product) => product.media, {
+    onDelete: "CASCADE",
+    nullable: true,
+  })
+  @JoinColumn({ name: "productId" })
+  product?: Relation<ProductEntity>;
 }
