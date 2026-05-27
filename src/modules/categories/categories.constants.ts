@@ -5,6 +5,7 @@ export const ERROR_MESSAGES = {
   CATEGORY_ALREADY_EXISTS: "Category already exists",
   CATEGORY_ALREADY_ACTIVE: "Category is already active",
   CATEGORY_ALREADY_INACTIVE: "Category is already inactive",
+  INVALID_SORT_FIELD: "Invalid sort field for category listing",
   INVALID_CATEGORY_UPDATE_PAYLOAD: "Please provide at least one field to update",
   CATEGORY_LINKED_WITH_PRODUCTS: "Category cannot be deleted because it is linked with products",
 };

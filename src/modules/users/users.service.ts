@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
 import { Repository, SelectQueryBuilder } from "typeorm";
@@ -114,6 +114,10 @@ export class UsersService {
       sortOrder = SortOrderEnum.DESC,
       isPagination = true,
     } = query;
+
+    if (!Object.values(UserSortByEnum).includes(sortBy as UserSortByEnum)) {
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_SORT_FIELD);
+    }
 
     const qb = this.userRepository
       .createQueryBuilder("user")

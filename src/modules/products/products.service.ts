@@ -85,19 +85,18 @@ export class ProductsService {
   async getApprovedProducts(query: GetAllProductDto): Promise<ProductPublicListResponse> {
     const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.PUBLIC_LIST);
 
-    qb.innerJoin("product.vendor", "vendor")
+    qb.innerJoin("product.vendor", "vendor", "vendor.status = :vendorStatus", {
+      vendorStatus: VendorStatusEnum.APPROVED,
+    })
       .andWhere("product.status = :status", {
         status: ProductStatusEnum.APPROVED,
-      })
-      .andWhere("vendor.status = :vendorStatus", {
-        vendorStatus: VendorStatusEnum.APPROVED,
       })
       .andWhere("product.isActive = true");
 
     this.applyProductFilters(qb, {
       ...query,
-      status: undefined,
-      vendorId: undefined,
+      status: undefined, // for public listing, we only show approved products, so ignore any status filter from query
+      vendorId: undefined, // for public listing, we don't filter by vendorId
     });
 
     return this.getProductListResponse<ProductPublicListResponse>({
@@ -166,20 +165,18 @@ export class ProductsService {
       isPagination = true,
     } = query;
 
+    if (!Object.values(ProductSortByEnum).includes(sortBy as ProductSortByEnum)) {
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_SORT_FIELD);
+    }
+
     qb.orderBy(`product.${sortBy}`, sortOrder);
 
-    applyPagination(qb, {
-      page,
-      limit,
-      isPagination,
-    });
-
-    if (!isPagination) {
-      const data = await qb.getMany();
-
-      return {
-        data,
-      } as unknown as T;
+    if (isPagination) {
+      applyPagination(qb, {
+        page,
+        limit,
+        isPagination,
+      });
     }
 
     const [data, total] = await qb.getManyAndCount();

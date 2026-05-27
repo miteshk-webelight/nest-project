@@ -10,6 +10,7 @@ export const ERROR_MESSAGES = {
   ADMIN_ONLY: "Only admin users can perform this action",
   USER_ALREADY_ACTIVE: "User is already active",
   PHONE_NUMBER_ALREADY_EXISTS: "Phone number already exists",
+  INVALID_SORT_FIELD: "Invalid sort field for user listing",
   NO_UPDATE_FIELDS_PROVIDED: "Please provide at least one field to update",
   USER_LINKED_WITH_VENDOR_PROFILE: "User cannot be deleted because it is linked with a vendor profile",
 };

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
 import { Repository, SelectQueryBuilder } from "typeorm";
@@ -277,6 +277,10 @@ export class CategoriesService {
       isActive,
       isPagination = true,
     } = query;
+
+    if (!Object.values(CommonSortByEnum).includes(sortBy as CommonSortByEnum)) {
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_SORT_FIELD);
+    }
 
     const cacheParams = [page, limit, search, sortBy, sortOrder, isActive, onlyActive, isPagination].join("-");
 

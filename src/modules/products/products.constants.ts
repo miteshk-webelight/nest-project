@@ -48,6 +48,7 @@ export const ERROR_MESSAGES = {
   CATEGORY_LINKED_WITH_PRODUCTS: "Category cannot be deleted because it contains products",
   VENDOR_PROFILE_NOT_FOUND: "Vendor profile not found for the user",
   INVALID_PRODUCT_STATUS_TRANSITION: "Invalid product status transition",
+  INVALID_SORT_FIELD: "Invalid sort field for product listing",
 };
 
 export const SUCCESS_MESSAGES = {
