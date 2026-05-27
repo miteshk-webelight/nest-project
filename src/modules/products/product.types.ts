@@ -19,8 +19,7 @@ export interface ProductWithMedia {
   status: string;
   isActive: boolean;
 
-  approvedBy?: string;
-  approvedAt?: Date;
+  reviewedAt?: Date;
 
   createdAt: Date;
   updatedAt: Date;

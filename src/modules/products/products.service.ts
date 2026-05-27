@@ -1,21 +1,27 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 
-import { QueryRunner } from "typeorm";
+import { QueryRunner, SelectQueryBuilder } from "typeorm";
 
+import { SortOrderEnum } from "src/constants/common.constants";
 import { handleServiceError } from "src/utils/service-error-handler";
 
-import { generateSlug } from "../../utils/helper.utils";
+import { applyPagination, generateSlug } from "../../utils/helper.utils";
+import { createPaginationMeta } from "../../utils/pagination.utils";
 import { CategoryEntity } from "../categories/category.entity";
 import { DatabaseService } from "../database/database.service";
 import { MediaModuleEnum } from "../media/media.constants";
+import { MediaEntity } from "../media/media.entity";
 import { MediaService } from "../media/media.service";
 import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
+import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
+import { GetAllProductDto } from "./dto/get-all-product.dto";
 import { ProductEntity } from "./product.entity";
+import { ProductListResponse, ProductPublicListResponse } from "./product.response";
 import { ProductWithMedia } from "./product.types";
-import { ERROR_MESSAGES, PRODUCT_SELECT_FIELDS, ProductStatusEnum } from "./products.constants";
+import { ERROR_MESSAGES, PRODUCT_SELECT_FIELDS, ProductSortByEnum, ProductStatusEnum } from "./products.constants";
 import {
   validateProductPrice,
   validateProductStatusTransition,
@@ -45,6 +51,143 @@ export class ProductsService {
     if (!category.isActive) {
       throw new BadRequestException(ERROR_MESSAGES.CATEGORY_NOT_ACTIVE);
     }
+  }
+
+  async getAllProducts(query: GetAllProductDto): Promise<ProductListResponse> {
+    const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
+
+    this.applyProductFilters(qb, query);
+
+    return this.getProductListResponse<ProductListResponse>({
+      qb,
+      query,
+    });
+  }
+
+  async getMyProducts(query: GetAllProductDto, vendorProfile?: VendorProfileEntity): Promise<ProductListResponse> {
+    if (!vendorProfile) {
+      throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+    }
+
+    const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
+
+    this.applyProductFilters(qb, {
+      ...query,
+      vendorId: vendorProfile.id,
+    });
+
+    return this.getProductListResponse<ProductListResponse>({
+      qb,
+      query,
+    });
+  }
+
+  async getApprovedProducts(query: GetAllProductDto): Promise<ProductPublicListResponse> {
+    const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.PUBLIC_LIST);
+
+    qb.innerJoin("product.vendor", "vendor")
+      .andWhere("product.status = :status", {
+        status: ProductStatusEnum.APPROVED,
+      })
+      .andWhere("vendor.status = :vendorStatus", {
+        vendorStatus: VendorStatusEnum.APPROVED,
+      })
+      .andWhere("product.isActive = true");
+
+    this.applyProductFilters(qb, {
+      ...query,
+      status: undefined,
+      vendorId: undefined,
+    });
+
+    return this.getProductListResponse<ProductPublicListResponse>({
+      qb,
+      query,
+    });
+  }
+
+  private createProductListQuery(selectFields: string[]): SelectQueryBuilder<ProductEntity> {
+    return this.databaseService
+      .getRepository(ProductEntity)
+      .createQueryBuilder("product")
+      .select(selectFields)
+      .leftJoinAndMapMany(
+        "product.media",
+        MediaEntity,
+        "media",
+        "media.recordId = product.id AND media.module = :mediaModule",
+        {
+          mediaModule: MediaModuleEnum.PRODUCT,
+        },
+      )
+      .addSelect(PRODUCT_SELECT_FIELDS.MEDIA);
+  }
+
+  private applyProductFilters(qb: SelectQueryBuilder<ProductEntity>, query: GetAllProductDto): void {
+    const { search, status, vendorId, name } = query;
+
+    if (search) {
+      qb.andWhere("product.name ILIKE :search", {
+        search: `%${search}%`,
+      });
+    }
+
+    if (name) {
+      qb.andWhere("product.name ILIKE :name", {
+        name: `%${name}%`,
+      });
+    }
+
+    if (status) {
+      qb.andWhere("product.status = :status", {
+        status,
+      });
+    }
+
+    if (vendorId) {
+      qb.andWhere("product.vendorId = :vendorId", {
+        vendorId,
+      });
+    }
+  }
+
+  private async getProductListResponse<T extends ProductListResponse | ProductPublicListResponse>({
+    qb,
+    query,
+  }: {
+    qb: SelectQueryBuilder<ProductEntity>;
+    query: GetAllProductDto;
+  }): Promise<T> {
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = ProductSortByEnum.CREATED_AT,
+      sortOrder = SortOrderEnum.DESC,
+      isPagination = true,
+    } = query;
+
+    qb.orderBy(`product.${sortBy}`, sortOrder);
+
+    applyPagination(qb, {
+      page,
+      limit,
+      isPagination,
+    });
+
+    if (!isPagination) {
+      const data = await qb.getMany();
+
+      return {
+        data,
+      } as unknown as T;
+    }
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      meta: createPaginationMeta(page, limit, total),
+    } as unknown as T;
   }
 
   async createProduct(dto: CreateProductDto, vendorProfile?: VendorProfileEntity): Promise<ProductWithMedia | void> {

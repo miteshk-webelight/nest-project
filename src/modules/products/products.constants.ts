@@ -8,6 +8,16 @@ export enum ProductStatusEnum {
   SUSPENDED = "SUSPENDED",
 }
 
+export enum ProductSortByEnum {
+  CREATED_AT = "createdAt",
+  UPDATED_AT = "updatedAt",
+  NAME = "name",
+  PRICE = "price",
+  STOCK = "stock",
+  STATUS = "status",
+  REVIEWED_AT = "reviewedAt",
+}
+
 export const VALID_PRODUCT_STATUS_TRANSITIONS: Record<ProductStatusEnum, ProductStatusEnum[]> = {
   [ProductStatusEnum.DRAFT]: [ProductStatusEnum.PENDING],
   [ProductStatusEnum.PENDING]: [ProductStatusEnum.APPROVED, ProductStatusEnum.REJECTED],
@@ -67,16 +77,40 @@ export const PRODUCT_SELECT_FIELDS = {
   STATUS: ["product.id", "product.status"],
   FULL: [
     "product.id",
+    "product.vendorId",
+    "product.categoryId",
     "product.name",
+    "product.slug",
     "product.sku",
     "product.description",
     "product.price",
     "product.discountPrice",
     "product.stock",
     "product.status",
-    "product.images",
+    "product.isActive",
+    "product.reviewedAt",
     "product.createdAt",
     "product.updatedAt",
+  ],
+  PUBLIC_LIST: [
+    "product.id",
+    "product.categoryId",
+    "product.name",
+    "product.slug",
+    "product.description",
+    "product.price",
+    "product.discountPrice",
+    "product.stock",
+    "product.createdAt",
+  ],
+  MEDIA: [
+    "media.id",
+    "media.filename",
+    "media.mimeType",
+    "media.size",
+    "media.filePath",
+    "media.module",
+    "media.recordId",
   ],
   CATEGORY: ["category.id", "category.name", "category.isActive"],
   VENDOR_ID: ["vendor.id"],

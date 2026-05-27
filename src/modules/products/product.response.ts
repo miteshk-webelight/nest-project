@@ -1,6 +1,6 @@
 import { OmitType } from "@nestjs/swagger";
 
-import { Expose, Type } from "class-transformer";
+import { Expose, Transform, Type } from "class-transformer";
 
 import { PaginationMetaResponse } from "../../types/pagination.types";
 import { MediaResponse } from "../media/media.response";
@@ -67,13 +67,9 @@ export class ProductResponse {
   isActive: boolean;
 
   @Expose()
-  @ApiPropertyWritable({ nullable: true })
-  approvedBy?: string;
-
-  @Expose()
   @Type(() => Date)
   @ApiPropertyWritable({ nullable: true, type: Date })
-  approvedAt?: Date;
+  reviewedAt?: Date;
 
   @Expose()
   @Type(() => Date)
@@ -91,13 +87,16 @@ export class ProductResponse {
 }
 
 export class ProductPublicResponse extends OmitType(ProductResponse, [
+  "vendorId",
   "sku",
   "status",
-  "approvedBy",
-  "approvedAt",
+  "reviewedAt",
+  "stock",
+  "isActive",
   "updatedAt",
 ] as const) {
   @Expose()
+  @Transform(({ obj }) => obj.stock <= 0)
   @ApiPropertyWritable()
   isOutOfStock: boolean;
 }

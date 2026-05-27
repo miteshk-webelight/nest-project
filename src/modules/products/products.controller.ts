@@ -1,8 +1,9 @@
-import { Body, Controller, Param, Patch, Post, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
 
+import { Public } from "src/decorators/public.decorator";
 import { VendorStatus } from "src/decorators/vendor-status.decorator";
 import { VendorStatusGuard } from "src/guards/vendor-status.guard";
 import { logger } from "src/services/logger.service";
@@ -17,8 +18,9 @@ import { UserRoleEnum } from "../users/user.constants";
 import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
+import { GetAllProductDto } from "./dto/get-all-product.dto";
 import { UpdateProductStatusDto } from "./dto/update-product-status.dto";
-import { ProductResponse } from "./product.response";
+import { ProductListResponse, ProductPublicListResponse, ProductResponse } from "./product.response";
 import { SUCCESS_MESSAGES } from "./products.constants";
 import { ProductsService } from "./products.service";
 
@@ -28,6 +30,52 @@ import type { Request, Response } from "express";
 @Controller("products")
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
+
+  @ApiSwaggerResponse(ProductPublicListResponse, { status: StatusCodes.OK })
+  @Public()
+  @RateLimit(60, 60)
+  @Get("list")
+  async getApprovedProducts(
+    @Res() res: Response,
+    @Query() query: GetAllProductDto,
+  ): Promise<Response<CommonResponseType<ProductPublicListResponse>>> {
+    try {
+      const products = await this.productsService.getApprovedProducts(query);
+
+      return responseUtils.success(res, {
+        data: products,
+        status: StatusCodes.OK,
+        transformWith: ProductPublicListResponse,
+      });
+    } catch (error) {
+      logger.error("Error fetching approved products list:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(ProductListResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
+  @VendorStatus(VendorStatusEnum.APPROVED)
+  @RateLimit(60, 60)
+  @Get("me")
+  async getMyProducts(
+    @Res() res: Response,
+    @Req() req: Request,
+    @Query() query: GetAllProductDto,
+  ): Promise<Response<CommonResponseType<ProductListResponse>>> {
+    try {
+      const products = await this.productsService.getMyProducts(query, req.vendorProfile);
+
+      return responseUtils.success(res, {
+        data: products,
+        status: StatusCodes.OK,
+        transformWith: ProductListResponse,
+      });
+    } catch (error) {
+      logger.error("Error fetching vendor products list:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
 
   @ApiSwaggerResponse(ProductResponse, { status: StatusCodes.CREATED })
   @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
@@ -95,6 +143,28 @@ export class ProductsController {
       });
     } catch (error) {
       logger.error("Error updating product status:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(ProductListResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(60, 60)
+  @Get()
+  async getAllProducts(
+    @Res() res: Response,
+    @Query() query: GetAllProductDto,
+  ): Promise<Response<CommonResponseType<ProductListResponse>>> {
+    try {
+      const products = await this.productsService.getAllProducts(query);
+
+      return responseUtils.success(res, {
+        data: products,
+        status: StatusCodes.OK,
+        transformWith: ProductListResponse,
+      });
+    } catch (error) {
+      logger.error("Error fetching products list:", error);
       return responseUtils.error({ res, error });
     }
   }
