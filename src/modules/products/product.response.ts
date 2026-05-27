@@ -86,11 +86,28 @@ export class ProductResponse {
   updatedAt: Date;
 }
 
+export class ProductAdminResponse extends ProductResponse {
+  @Expose()
+  @ApiPropertyWritable({ nullable: true })
+  reviewedBy?: string;
+
+  @Expose()
+  @ApiPropertyWritable({ nullable: true })
+  createdBy?: string;
+
+  @Expose()
+  @ApiPropertyWritable({ nullable: true })
+  updatedBy?: string;
+}
+
+export class ProductVendorResponse extends ProductResponse {}
+
 export class ProductPublicResponse extends OmitType(ProductResponse, [
   "vendorId",
   "sku",
   "status",
   "reviewedAt",
+  "createdAt",
   "stock",
   "isActive",
   "updatedAt",

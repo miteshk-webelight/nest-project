@@ -35,6 +35,11 @@ interface ApiSwaggerFileOption {
   mimeTypes: string[];
 }
 
+interface ApiSwaggerPolymorphicOption {
+  status?: StatusCodes;
+  models: Type[];
+}
+
 const getExceptionSchema = (httpStatus: number) => ({
   allOf: [
     { $ref: getSchemaPath(ExceptionErrorDto) },
@@ -106,6 +111,35 @@ export function ApiSwaggerResponse<TModel extends Type>(model: TModel, options?:
         ],
       },
       description: status === StatusCodes.CREATED ? SUCCESS_MESSAGES.CREATED : SUCCESS_MESSAGES.SUCCESS,
+    }),
+    ...commonDecorators,
+  );
+}
+
+export function ApiSwaggerPolymorphicResponse(options: ApiSwaggerPolymorphicOption) {
+  const { status = StatusCodes.OK, models } = options;
+
+  return applyDecorators(
+    ApiExtraModels(ResponseDto),
+    ...models.map((model) => ApiExtraModels(model)),
+    ApiResponse({
+      status,
+      schema: {
+        allOf: [
+          {
+            $ref: getSchemaPath(ResponseDto),
+          },
+          {
+            properties: {
+              data: {
+                oneOf: models.map((model) => ({ $ref: getSchemaPath(model) })),
+              },
+              status: { example: status },
+            },
+          },
+        ],
+      },
+      description: SUCCESS_MESSAGES.SUCCESS,
     }),
     ...commonDecorators,
   );
