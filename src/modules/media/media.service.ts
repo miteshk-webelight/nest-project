@@ -1,95 +1,163 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
+import { BadRequestException, Injectable } from "@nestjs/common";
 
-import { QueryRunner, Repository } from "typeorm";
-
+import cloudinary from "../../config/cloudinary.config";
+import { handleServiceError } from "../../utils/service-error-handler";
 import { DatabaseService } from "../database/database.service";
 
-import { ERROR_MESSAGES } from "./constants/message";
+import { ERROR_MESSAGES, MEDIA_CONSTANTS, MEDIA_SELECT_FIELDS, MediaModuleEnum } from "./media.constants";
 import { MediaEntity } from "./media.entity";
+
+import type { UploadApiResponse } from "cloudinary";
+import type { QueryRunner } from "typeorm";
 
 @Injectable()
 export class MediaService {
-  constructor(
-    @InjectRepository(MediaEntity)
-    private readonly mediaRepository: Repository<MediaEntity>,
-    private readonly databaseService: DatabaseService,
-  ) {}
+  constructor(private readonly databaseService: DatabaseService) {}
 
-  async ManageMedia(recordId: string, module: string, media: MediaEntity[]): Promise<void> {
-    const existMedia = await this.mediaRepository
-      .createQueryBuilder("media")
-      .where("media.recordId = :recordId AND media.module = :module", { recordId, module })
-      .getMany();
-
-    const existingMediapath = existMedia.map((m) => m.filePath);
-
-    const mediaToAdd = media.filter((m) => !existingMediapath.includes(m.filePath));
-
-    const mediaToRemove = existingMediapath.filter((path) => !media.map((m) => m.filePath).includes(path));
-
-    const MediaToUpdate = media.filter((m) => existingMediapath.includes(m.filePath));
+  async uploadFiles(files: Express.Multer.File[]): Promise<MediaEntity[] | void> {
+    if (!files.length) {
+      throw new BadRequestException(ERROR_MESSAGES.NO_FILES_UPLOADED);
+    }
 
     const queryRunner = await this.databaseService.createQueryRunner();
 
+    const uploadedPublicIds: string[] = [];
+
     try {
-      if (mediaToRemove.length > 0) {
-        await this.deleteMedia(mediaToRemove, queryRunner);
+      const mediaRepository = queryRunner.manager.getRepository(MediaEntity);
+
+      const mediaEntities: MediaEntity[] = [];
+
+      for (const file of files) {
+        this.validateFile(file);
+
+        const uploadResult = await this.uploadToCloudinary(file);
+
+        uploadedPublicIds.push(uploadResult.public_id);
+
+        const mediaEntity = mediaRepository.create({
+          filename: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+          filePath: uploadResult.secure_url,
+        });
+
+        mediaEntities.push(mediaEntity);
       }
 
-      if (mediaToAdd.length > 0) {
-        await this.ValidateMedia(mediaToAdd.map((m) => m.filePath));
+      const savedMedia = await mediaRepository.save(mediaEntities);
 
-        await Promise.all(
-          mediaToAdd.map(async (mediaEntity) => {
-            const newMedia = this.mediaRepository.create({ ...mediaEntity, recordId, module });
-            await queryRunner.manager.save(newMedia);
-          }),
-        );
-      }
-      if (MediaToUpdate.length > 0) {
-        await Promise.all(
-          MediaToUpdate.map(async (mediaEntity) => {
-            const existMediaEntity = existMedia.find((m) => m.filePath === mediaEntity.filePath);
-            if (existMediaEntity) {
-              const updated = Object.assign(existMediaEntity, mediaEntity);
-              await queryRunner.manager.save(updated);
-            }
-          }),
-        );
-      }
+      await this.databaseService.commitTransaction(queryRunner);
+
+      return savedMedia;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
+      await this.databaseService.rollbackTransaction(queryRunner);
+
+      await this.deleteUploadedFiles(uploadedPublicIds);
+
+      handleServiceError(error, "uploadFiles");
     } finally {
-      await queryRunner.release();
+      await this.databaseService.releaseQueryRunner(queryRunner);
     }
   }
 
-  async ValidateMedia(paths: string[]): Promise<void> {
-    const existMedia = await this.mediaRepository
-      .createQueryBuilder("media")
-      .where("media.filePath IN (:...paths)", { paths })
-      .getMany();
+  private validateFile(file: Express.Multer.File): void {
+    if (!MEDIA_CONSTANTS.ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_FILE_TYPE);
+    }
 
-    if (existMedia.length !== paths.length) {
-      throw new ConflictException(ERROR_MESSAGES.MEDIA_ALREADY_EXISTS);
+    if (file.size > MEDIA_CONSTANTS.MAX_FILE_SIZE) {
+      throw new BadRequestException(ERROR_MESSAGES.FILE_TOO_LARGE);
     }
   }
 
-  async deleteMedia(paths: string[], queryRunner?: QueryRunner): Promise<void> {
-    const existMedia = await this.mediaRepository
+  private async uploadToCloudinary(file: Express.Multer.File): Promise<UploadApiResponse> {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: MEDIA_CONSTANTS.CLOUDINARY_FOLDER,
+          resource_type: "image",
+        },
+        (error, result) => {
+          if (error || !result) {
+            reject(new BadRequestException(ERROR_MESSAGES.UPLOAD_FAILED));
+
+            return;
+          }
+
+          resolve(result);
+        },
+      );
+
+      uploadStream.end(file.buffer);
+    });
+  }
+
+  private async deleteUploadedFiles(publicIds: string[]): Promise<void> {
+    if (!publicIds.length) {
+      return;
+    }
+
+    await Promise.allSettled(
+      publicIds.map(async (publicId) => {
+        await cloudinary.uploader.destroy(publicId);
+      }),
+    );
+  }
+
+  async validateMediaIds(mediaIds: string[], queryRunner: QueryRunner): Promise<void> {
+    if (mediaIds.length > MEDIA_CONSTANTS.MAX_FILES) {
+      throw new BadRequestException(ERROR_MESSAGES.MAX_FILES_EXCEEDED);
+    }
+
+    const mediaRepository = queryRunner.manager.getRepository(MediaEntity);
+
+    const media = await mediaRepository
       .createQueryBuilder("media")
-      .where("media.filePath IN (:...paths)", { paths })
+      .select(MEDIA_SELECT_FIELDS.MEDIA_ID)
+      .where("media.id IN (:...mediaIds)", {
+        mediaIds,
+      })
+      .andWhere("media.recordId IS NULL")
       .getMany();
 
-    if (existMedia.length !== paths.length) {
-      throw new NotFoundException(ERROR_MESSAGES.MEDIA_NOT_FOUND);
+    if (media.length !== mediaIds.length) {
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_MEDIA_IDS);
     }
-    if (queryRunner) {
-      await queryRunner.manager.softRemove(existMedia);
-    } else {
-      await this.mediaRepository.softRemove(existMedia);
-    }
+  }
+
+  async attachMediaToRecord(
+    mediaIds: string[],
+    module: MediaModuleEnum,
+    recordId: string,
+    queryRunner: QueryRunner,
+  ): Promise<void> {
+    const mediaRepository = queryRunner.manager.getRepository(MediaEntity);
+
+    await mediaRepository
+      .createQueryBuilder()
+      .update(MediaEntity)
+      .set({
+        module,
+        recordId,
+      })
+      .where("id IN (:...mediaIds)", {
+        mediaIds,
+      })
+      .execute();
+  }
+
+  async getMediaByRecord(module: MediaModuleEnum, recordId: string): Promise<MediaEntity[]> {
+    const mediaRepository = this.databaseService.getRepository(MediaEntity);
+
+    return await mediaRepository
+      .createQueryBuilder("media")
+      .where("media.module = :module", {
+        module,
+      })
+      .andWhere("media.recordId = :recordId", {
+        recordId,
+      })
+      .getMany();
   }
 }

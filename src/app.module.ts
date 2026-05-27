@@ -13,6 +13,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { CategoriesModule } from "./modules/categories/categories.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { FileManagementModule } from "./modules/fileManagment/fileManagment.module";
+import { ProductsModule } from "./modules/products/products.module";
 import { RateLimitGuard } from "./modules/rateLimiter/guards/rate-limit.guard";
 import { RateLimiterModule } from "./modules/rateLimiter/rate-limiter.module";
 import { UsersModule } from "./modules/users/users.module";
@@ -29,6 +30,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     VendorsModule,
     CategoriesModule,
     ClsModule.forRoot(clsConfig),
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [

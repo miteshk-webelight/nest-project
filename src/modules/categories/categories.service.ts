@@ -9,6 +9,8 @@ import { handleServiceError } from "src/utils/service-error-handler";
 import { applyPagination, generateSlug } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
 import { DatabaseService } from "../database/database.service";
+import { ProductEntity } from "../products/product.entity";
+import { PRODUCT_SELECT_FIELDS } from "../products/products.constants";
 import { RedisService } from "../redis/redis.service";
 import { UsersEntity } from "../users/entity/users.entity";
 
@@ -35,6 +37,9 @@ export class CategoriesService {
   constructor(
     @InjectRepository(CategoryEntity)
     private readonly categoryRepository: Repository<CategoryEntity>,
+
+    @InjectRepository(ProductEntity)
+    private readonly productRepository: Repository<ProductEntity>,
 
     private readonly redisService: RedisService,
 
@@ -211,9 +216,15 @@ export class CategoriesService {
   }
 
   private async validateCategoryDeletion(categoryId: string): Promise<void> {
-    // Need to Implement product validation when Product module is created
-    // Check if category is linked with any products
-    // If linked, throw ConflictException(ERROR_MESSAGES.CATEGORY_LINKED_WITH_PRODUCTS)
+    const productCount = await this.productRepository
+      .createQueryBuilder("product")
+      .select(PRODUCT_SELECT_FIELDS.ID)
+      .where("product.categoryId = :categoryId", { categoryId })
+      .getCount();
+
+    if (productCount > 0) {
+      throw new ConflictException(ERROR_MESSAGES.CATEGORY_LINKED_WITH_PRODUCTS);
+    }
   }
 
   async updateCategoryStatus({ id, dto, admin }: CategoryAdminActionParams<UpdateCategoryStatusDto>): Promise<void> {

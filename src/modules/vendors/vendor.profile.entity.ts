@@ -1,6 +1,7 @@
-import { Column, Entity, JoinColumn, ManyToOne, type Relation } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, type Relation } from "typeorm";
 
 import { BaseEntity } from "../database/base-entity";
+import { ProductEntity } from "../products/product.entity";
 import { UsersEntity } from "../users/entity/users.entity";
 
 import { VendorStatusEnum } from "./vendors.constants";
@@ -50,4 +51,7 @@ export class VendorProfileEntity extends BaseEntity {
 
   @Column({ nullable: true, type: "timestamp" })
   approvedAt?: Date;
+
+  @OneToMany(() => ProductEntity, (product) => product.vendor)
+  products: ProductEntity[];
 }

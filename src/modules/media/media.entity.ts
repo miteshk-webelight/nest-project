@@ -1,4 +1,4 @@
-import { Column, Entity, DeleteDateColumn, Index } from "typeorm";
+import { Column, Entity, Index } from "typeorm";
 
 import { BaseEntity } from "../database/base-entity";
 
@@ -14,7 +14,7 @@ export class MediaEntity extends BaseEntity {
   filename: string;
 
   @Column()
-  fileType: string;
+  mimeType: string;
 
   @Column()
   size: number;
@@ -22,9 +22,9 @@ export class MediaEntity extends BaseEntity {
   @Column()
   filePath: string;
 
-  @Column()
-  module: string;
+  @Column({ nullable: true })
+  module?: string;
 
-  @Column()
-  recordId: string;
+  @Column({ nullable: true })
+  recordId?: string;
 }

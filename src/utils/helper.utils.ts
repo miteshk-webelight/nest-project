@@ -16,13 +16,20 @@ export const pagination = (page: number, limit: number): number => {
 
   return offset;
 };
-export function generateSlug(name: string): string {
-  return name
+export function generateSlug(name: string, randomSuffix?: boolean): string {
+  let slug = name
     .toLowerCase()
     .trim()
     .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+    .replace(/\s+/g, "-");
+
+  if (randomSuffix) {
+    const random = Math.floor(Math.random() * 10000);
+
+    slug += `-${random}`;
+  }
+
+  return slug;
 }
 
 export const applyPagination = <T extends ObjectLiteral>(
