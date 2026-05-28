@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
+import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerModule } from "@nestjs/throttler";
 
 import { ClsModule } from "nestjs-cls";
@@ -31,6 +32,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     CategoriesModule,
     ClsModule.forRoot(clsConfig),
     ProductsModule,
+    ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [

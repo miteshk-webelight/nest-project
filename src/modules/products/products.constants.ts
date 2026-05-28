@@ -55,6 +55,12 @@ export const ERROR_MESSAGES = {
   VENDOR_PROFILE_NOT_FOUND: "Vendor profile not found for the user",
   INVALID_PRODUCT_STATUS_TRANSITION: "Invalid product status transition",
   INVALID_SORT_FIELD: "Invalid sort field for product listing",
+  REMOVED_MEDIA_MUST_BE_UNIQUE: "Removed media IDs must be unique",
+  REMOVED_MEDIA_BELONG_TO_CURRENT_PRODUCT: "Removed media must belong to current product",
+  NEW_MEDIA_IDS_MUST_UNIQUE: "New media IDs must be unique",
+  NEW_MEDIA_NOT_OVERLAP_WITH_REMOVED_IDS: "New media IDs must not overlap with removed media IDs",
+  YOU_CAN_ONLY_ATTACH_MEDIA_YOU_UPLOADED: "You can only attach media you uploaded",
+  MEDIA_MUST_NOT_ATTACHED_TO_ANOTHER_RECORD: "Media must not be attached to another record",
 };
 
 export const SUCCESS_MESSAGES = {
@@ -149,4 +155,9 @@ export const PRODUCT_SELECT_FIELDS = {
   VENDOR_ID: ["vendor.id"],
   VENDOR_PROFILE: ["vendor.id", "vendor.userId", "vendor.status"],
   PRODUCT_ID: ["product.id"],
+};
+
+export const PRODUCT_MEDIA_COUNTS = {
+  MIN: 1,
+  MAX: 5,
 };

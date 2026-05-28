@@ -19,6 +19,7 @@ import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
 import { GetAllProductDto } from "./dto/get-all-product.dto";
+import { UpdateProductDto } from "./dto/update-product.dto";
 import { resolveProductVisibility } from "./product-access.resolver";
 import { ProductEntity } from "./product.entity";
 import { ProductListResponse, ProductPublicListResponse } from "./product.response";
@@ -33,13 +34,18 @@ import {
 } from "./products.constants";
 import {
   buildProductListCacheKey,
+  clearProductDetailsCache,
   clearProductListCache,
   getProductDetailsCacheKey,
 } from "./utils/product-cache.utils";
+import { syncProductMedia, validateProductMediaUpdates } from "./utils/product-media.utils";
+import { applyProductUpdates } from "./utils/product-update.utils";
 import {
   validateProductPrice,
   validateProductStatusTransition,
+  validateProductUpdate,
   validateSkuUniqueness,
+  validateUpdatePayload,
 } from "./utils/product-validation.utils";
 
 @Injectable()
@@ -387,6 +393,68 @@ export class ProductsService {
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
       handleServiceError(error, "submitProductApprovalRequest");
+    } finally {
+      await this.databaseService.releaseQueryRunner(queryRunner);
+    }
+  }
+
+  async updateProduct(productId: string, dto: UpdateProductDto, vendorProfile?: VendorProfileEntity): Promise<void> {
+    validateUpdatePayload(dto);
+
+    if (!vendorProfile) {
+      throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+    }
+
+    const vendorId = vendorProfile.id;
+    const queryRunner = await this.databaseService.createQueryRunner();
+
+    try {
+      const productRepository = queryRunner.manager.getRepository(ProductEntity);
+
+      const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.FULL, queryRunner, vendorId);
+
+      if (!product) {
+        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+      }
+
+      if (product.status === ProductStatusEnum.SUSPENDED) {
+        throw new BadRequestException(ERROR_MESSAGES.PRODUCT_CANNOT_BE_MODIFIED);
+      }
+
+      await validateProductMediaUpdates({
+        dto,
+        productId,
+        vendorUserId: vendorProfile.userId,
+        mediaService: this.mediaService,
+      });
+
+      await validateProductUpdate({
+        dto,
+        product,
+        productId,
+        vendorId,
+        productRepository,
+        validateCategoryExistsAndActive: this.validateCategoryExistsAndActive.bind(this),
+      });
+
+      applyProductUpdates(dto, product);
+
+      await productRepository.save(product);
+
+      await syncProductMedia({
+        dto,
+        productId,
+        mediaService: this.mediaService,
+        queryRunner,
+      });
+
+      await this.databaseService.commitTransaction(queryRunner);
+
+      await clearProductListCache(this.redisService);
+      await clearProductDetailsCache(this.redisService, productId);
+    } catch (error) {
+      await this.databaseService.rollbackTransaction(queryRunner);
+      handleServiceError(error, "updateProduct");
     } finally {
       await this.databaseService.releaseQueryRunner(queryRunner);
     }

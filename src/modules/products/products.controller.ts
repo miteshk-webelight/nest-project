@@ -21,6 +21,7 @@ import { VendorStatusEnum } from "../vendors/vendors.constants";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { GetAllProductDto } from "./dto/get-all-product.dto";
 import { UpdateProductStatusDto } from "./dto/update-product-status.dto";
+import { UpdateProductDto } from "./dto/update-product.dto";
 import {
   ProductAdminResponse,
   ProductListResponse,
@@ -179,6 +180,38 @@ export class ProductsController {
     } catch (error) {
       logger.error("Error fetching product details:", error);
       return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, {
+    status: StatusCodes.OK,
+  })
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
+  @VendorStatus(VendorStatusEnum.APPROVED)
+  @RateLimit(20, 60)
+  @Patch(":id")
+  async updateProduct(
+    @Res() res: Response,
+    @Req() req: Request,
+    @Param("id") productId: string,
+    @Body() dto: UpdateProductDto,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.productsService.updateProduct(productId, dto, req.vendorProfile);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.PRODUCT_UPDATED_SUCCESS,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error("Error updating product:", error);
+
+      return responseUtils.error({
+        res,
+        error,
+      });
     }
   }
 
