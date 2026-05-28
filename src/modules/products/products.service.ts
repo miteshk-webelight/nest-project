@@ -12,16 +12,30 @@ import { DatabaseService } from "../database/database.service";
 import { MediaModuleEnum } from "../media/media.constants";
 import { MediaEntity } from "../media/media.entity";
 import { MediaService } from "../media/media.service";
+import { RedisService } from "../redis/redis.service";
 import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
 import { GetAllProductDto } from "./dto/get-all-product.dto";
+import { resolveProductVisibility } from "./product-access.resolver";
 import { ProductEntity } from "./product.entity";
 import { ProductListResponse, ProductPublicListResponse } from "./product.response";
+import { serializeProductByVisibility, type ProductDetailsResponse } from "./product.serializer";
 import { ProductWithMedia } from "./product.types";
-import { ERROR_MESSAGES, PRODUCT_SELECT_FIELDS, ProductSortByEnum, ProductStatusEnum } from "./products.constants";
+import {
+  ERROR_MESSAGES,
+  PRODUCT_CACHE_TTL,
+  PRODUCT_SELECT_FIELDS,
+  ProductSortByEnum,
+  ProductStatusEnum,
+} from "./products.constants";
+import {
+  buildProductListCacheKey,
+  clearProductListCache,
+  getProductDetailsCacheKey,
+} from "./utils/product-cache.utils";
 import {
   validateProductPrice,
   validateProductStatusTransition,
@@ -33,6 +47,7 @@ export class ProductsService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly mediaService: MediaService,
+    private readonly redisService: RedisService,
   ) {}
 
   private async validateCategoryExistsAndActive(categoryId: string): Promise<void> {
@@ -54,13 +69,21 @@ export class ProductsService {
   }
 
   async getAllProducts(query: GetAllProductDto): Promise<ProductListResponse> {
-    const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
+    const cacheKey = buildProductListCacheKey(query);
 
-    this.applyProductFilters(qb, query);
+    return this.redisService.getOrSet<ProductListResponse>({
+      key: cacheKey,
+      ttl: PRODUCT_CACHE_TTL,
+      fetcher: async () => {
+        const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
 
-    return this.getProductListResponse<ProductListResponse>({
-      qb,
-      query,
+        this.applyProductFilters(qb, query);
+
+        return this.getProductListResponse<ProductListResponse>({
+          qb,
+          query,
+        });
+      },
     });
   }
 
@@ -83,25 +106,62 @@ export class ProductsService {
   }
 
   async getApprovedProducts(query: GetAllProductDto): Promise<ProductPublicListResponse> {
-    const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.PUBLIC_LIST);
+    const cacheKey = buildProductListCacheKey(
+      {
+        ...query,
+        status: undefined,
+        vendorId: undefined,
+      },
+      true,
+    );
 
-    qb.innerJoin("product.vendor", "vendor", "vendor.status = :vendorStatus", {
-      vendorStatus: VendorStatusEnum.APPROVED,
-    })
-      .andWhere("product.status = :status", {
-        status: ProductStatusEnum.APPROVED,
-      })
-      .andWhere("product.isActive = true");
+    return this.redisService.getOrSet<ProductPublicListResponse>({
+      key: cacheKey,
+      ttl: PRODUCT_CACHE_TTL,
+      fetcher: async () => {
+        const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.PUBLIC_LIST);
 
-    this.applyProductFilters(qb, {
-      ...query,
-      status: undefined, // for public listing, we only show approved products, so ignore any status filter from query
-      vendorId: undefined, // for public listing, we don't filter by vendorId
+        qb.innerJoin("product.vendor", "vendor", "vendor.status = :vendorStatus", {
+          vendorStatus: VendorStatusEnum.APPROVED,
+        })
+          .andWhere("product.status = :status", {
+            status: ProductStatusEnum.APPROVED,
+          })
+          .andWhere("product.isActive = true");
+
+        this.applyProductFilters(qb, {
+          ...query,
+          status: undefined, // for public listing, we only show approved products, so ignore any status filter from query
+          vendorId: undefined, // for public listing, we don't filter by vendorId
+        });
+
+        return this.getProductListResponse<ProductPublicListResponse>({
+          qb,
+          query,
+        });
+      },
     });
+  }
 
-    return this.getProductListResponse<ProductPublicListResponse>({
-      qb,
-      query,
+  async getProductById(
+    productId: string,
+    user?: UsersEntity,
+    vendorProfile?: VendorProfileEntity,
+  ): Promise<ProductDetailsResponse> {
+    const { product, media } = await this.getProductDetailsWithMedia(productId);
+
+    if (!product) {
+      throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+    }
+
+    const visibility = resolveProductVisibility(product, user, vendorProfile);
+
+    const cacheKey = getProductDetailsCacheKey(productId, visibility);
+
+    return this.redisService.getOrSet<ProductDetailsResponse>({
+      key: cacheKey,
+      ttl: PRODUCT_CACHE_TTL,
+      fetcher: () => Promise.resolve(serializeProductByVisibility(product, media, visibility)),
     });
   }
 
@@ -110,6 +170,35 @@ export class ProductsService {
       .getRepository(ProductEntity)
       .createQueryBuilder("product")
       .select(selectFields)
+      .leftJoinAndMapMany(
+        "product.media",
+        MediaEntity,
+        "media",
+        "media.recordId = product.id AND media.module = :mediaModule",
+        {
+          mediaModule: MediaModuleEnum.PRODUCT,
+        },
+      )
+      .addSelect(PRODUCT_SELECT_FIELDS.MEDIA);
+  }
+
+  private async getProductDetailsWithMedia(
+    productId: string,
+  ): Promise<{ product: ProductEntity | null; media: MediaEntity[] }> {
+    const product = await this.createProductDetailsQuery().where("product.id = :productId", { productId }).getOne();
+
+    return {
+      product,
+      media: (product as ProductEntity & { media?: MediaEntity[] }).media ?? [],
+    };
+  }
+
+  private createProductDetailsQuery(): SelectQueryBuilder<ProductEntity> {
+    return this.databaseService
+      .getRepository(ProductEntity)
+      .createQueryBuilder("product")
+      .select(PRODUCT_SELECT_FIELDS.DETAILS)
+      .leftJoin("product.vendor", "vendor")
       .leftJoinAndMapMany(
         "product.media",
         MediaEntity,
@@ -236,6 +325,8 @@ export class ProductsService {
       await this.databaseService.commitTransaction(queryRunner);
       const media = await this.mediaService.getMediaByRecord(MediaModuleEnum.PRODUCT, savedProduct.id);
 
+      await clearProductListCache(this.redisService);
+
       return { ...savedProduct, media };
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
@@ -245,7 +336,7 @@ export class ProductsService {
     }
   }
 
-  private async getProductById(
+  private async getProductForUpdate(
     productId: string,
     selectFields: string[],
     queryRunner: QueryRunner,
@@ -277,7 +368,7 @@ export class ProductsService {
 
       const vendorId = vendorProfile.id;
 
-      const product = await this.getProductById(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner, vendorId);
+      const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner, vendorId);
 
       if (!product) {
         throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
@@ -291,6 +382,8 @@ export class ProductsService {
 
       await productRepository.save(product);
       await this.databaseService.commitTransaction(queryRunner);
+
+      await clearProductListCache(this.redisService);
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
       handleServiceError(error, "submitProductApprovalRequest");
@@ -305,7 +398,7 @@ export class ProductsService {
     try {
       const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
-      const product = await this.getProductById(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner);
+      const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner);
 
       if (!product) {
         throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
@@ -319,6 +412,8 @@ export class ProductsService {
 
       await productRepository.save(product);
       await this.databaseService.commitTransaction(queryRunner);
+
+      await clearProductListCache(this.redisService);
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
       handleServiceError(error, "updateProductStatus");

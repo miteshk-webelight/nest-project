@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 
 import { Public } from "src/decorators/public.decorator";
 import { VendorStatus } from "src/decorators/vendor-status.decorator";
+import { OptionalAuthGuard } from "src/guards/optional-auth.guard";
 import { VendorStatusGuard } from "src/guards/vendor-status.guard";
 import { logger } from "src/services/logger.service";
 
@@ -13,17 +14,25 @@ import { RoleGuard } from "../../guards/role-guard";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
 import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
-import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
+import { ApiSwaggerPolymorphicResponse, ApiSwaggerResponse } from "../swagger/swagger.decorator";
 import { UserRoleEnum } from "../users/user.constants";
 import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { CreateProductDto } from "./dto/create-product.dto";
 import { GetAllProductDto } from "./dto/get-all-product.dto";
 import { UpdateProductStatusDto } from "./dto/update-product-status.dto";
-import { ProductListResponse, ProductPublicListResponse, ProductResponse } from "./product.response";
+import {
+  ProductAdminResponse,
+  ProductListResponse,
+  ProductPublicListResponse,
+  ProductPublicResponse,
+  ProductResponse,
+  ProductVendorResponse,
+} from "./product.response";
 import { SUCCESS_MESSAGES } from "./products.constants";
 import { ProductsService } from "./products.service";
 
+import type { ProductDetailsResponse } from "./product.serializer";
 import type { Request, Response } from "express";
 
 @ApiTags(ApiTag.Products)
@@ -143,6 +152,32 @@ export class ProductsController {
       });
     } catch (error) {
       logger.error("Error updating product status:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerPolymorphicResponse({
+    status: StatusCodes.OK,
+    models: [ProductAdminResponse, ProductVendorResponse, ProductPublicResponse],
+  })
+  @Public()
+  @UseGuards(OptionalAuthGuard)
+  @RateLimit(60, 60)
+  @Get(":id")
+  async getProductById(
+    @Res() res: Response,
+    @Req() req: Request,
+    @Param("id") productId: string,
+  ): Promise<Response<CommonResponseType<ProductDetailsResponse>>> {
+    try {
+      const product = await this.productsService.getProductById(productId, req.user, req.vendorProfile);
+
+      return responseUtils.success(res, {
+        data: product,
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error("Error fetching product details:", error);
       return responseUtils.error({ res, error });
     }
   }

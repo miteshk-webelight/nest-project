@@ -8,6 +8,12 @@ export enum ProductStatusEnum {
   SUSPENDED = "SUSPENDED",
 }
 
+export enum ProductVisibilityEnum {
+  ADMIN = "ADMIN",
+  VENDOR_OWNER = "VENDOR_OWNER",
+  PUBLIC = "PUBLIC",
+}
+
 export enum ProductSortByEnum {
   CREATED_AT = "createdAt",
   UPDATED_AT = "updatedAt",
@@ -89,9 +95,34 @@ export const PRODUCT_SELECT_FIELDS = {
     "product.stock",
     "product.status",
     "product.isActive",
+    "product.reviewedBy",
     "product.reviewedAt",
+    "product.createdBy",
+    "product.updatedBy",
     "product.createdAt",
     "product.updatedAt",
+  ],
+  DETAILS: [
+    "product.id",
+    "product.vendorId",
+    "product.categoryId",
+    "product.name",
+    "product.slug",
+    "product.sku",
+    "product.description",
+    "product.price",
+    "product.discountPrice",
+    "product.stock",
+    "product.status",
+    "product.isActive",
+    "product.reviewedBy",
+    "product.reviewedAt",
+    "product.createdBy",
+    "product.updatedBy",
+    "product.createdAt",
+    "product.updatedAt",
+    "vendor.id",
+    "vendor.status",
   ],
   PUBLIC_LIST: [
     "product.id",
@@ -110,6 +141,7 @@ export const PRODUCT_SELECT_FIELDS = {
     "media.mimeType",
     "media.size",
     "media.filePath",
+    "media.createdAt",
     "media.module",
     "media.recordId",
   ],

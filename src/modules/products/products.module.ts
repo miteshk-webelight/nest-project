@@ -1,6 +1,8 @@
 import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
+import { OptionalAuthGuard } from "src/guards/optional-auth.guard";
+
 import { CategoryEntity } from "../categories/category.entity";
 import { DatabaseModule } from "../database/database.module";
 import { MediaModule } from "../media/media.module";
@@ -20,7 +22,7 @@ import { ProductsService } from "./products.service";
     MediaModule,
   ],
   controllers: [ProductsController],
-  providers: [ProductsService],
+  providers: [ProductsService, OptionalAuthGuard],
   exports: [ProductsService],
 })
 export class ProductsModule {}
