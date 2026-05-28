@@ -8,13 +8,13 @@ import type { MediaResponse } from "../media/media.response";
 export type ProductDetailsResponse = ProductAdminResponse | ProductVendorResponse | ProductPublicResponse;
 
 function serializeMedia(mediaItems: MediaEntity[]): MediaResponse[] {
-  return mediaItems.map((media) => ({
-    id: media.id,
-    filePath: media.filePath,
-    filename: media.filename,
-    mimeType: media.mimeType,
-    size: media.size,
-    createdAt: media.createdAt,
+  return mediaItems.map(({ id, filePath, filename, mimeType, size, createdAt }) => ({
+    id,
+    filePath,
+    filename,
+    mimeType,
+    size,
+    createdAt,
   }));
 }
 

@@ -185,13 +185,11 @@ export class ProductsService {
   private async getProductDetailsWithMedia(
     productId: string,
   ): Promise<{ product: ProductEntity | null; media: MediaEntity[] }> {
-    const { entities, raw } = await this.createProductDetailsQuery()
-      .where("product.id = :productId", { productId })
-      .getRawAndEntities();
+    const product = await this.createProductDetailsQuery().where("product.id = :productId", { productId }).getOne();
 
     return {
-      product: entities[0] ?? null,
-      media: this.mapProductMediaRows(raw),
+      product,
+      media: (product as ProductEntity & { media?: MediaEntity[] }).media ?? [],
     };
   }
 
@@ -201,35 +199,16 @@ export class ProductsService {
       .createQueryBuilder("product")
       .select(PRODUCT_SELECT_FIELDS.DETAILS)
       .leftJoin("product.vendor", "vendor")
-      .leftJoin(MediaEntity, "media", "media.recordId = product.id AND media.module = :mediaModule", {
-        mediaModule: MediaModuleEnum.PRODUCT,
-      })
+      .leftJoinAndMapMany(
+        "product.media",
+        MediaEntity,
+        "media",
+        "media.recordId = product.id AND media.module = :mediaModule",
+        {
+          mediaModule: MediaModuleEnum.PRODUCT,
+        },
+      )
       .addSelect(PRODUCT_SELECT_FIELDS.MEDIA);
-  }
-
-  private mapProductMediaRows(rows: Record<string, unknown>[]): MediaEntity[] {
-    const mediaById = new Map<string, MediaEntity>();
-
-    for (const row of rows) {
-      const mediaId = row.media_id as string | null;
-
-      if (!mediaId || mediaById.has(mediaId)) {
-        continue;
-      }
-
-      mediaById.set(mediaId, {
-        id: mediaId,
-        filename: row.media_filename as string,
-        mimeType: row.media_mimeType as string,
-        size: row.media_size as number,
-        filePath: row.media_filePath as string,
-        module: row.media_module as string | undefined,
-        recordId: row.media_recordId as string | undefined,
-        createdAt: row.media_createdAt as Date,
-      } as MediaEntity);
-    }
-
-    return [...mediaById.values()];
   }
 
   private applyProductFilters(qb: SelectQueryBuilder<ProductEntity>, query: GetAllProductDto): void {
