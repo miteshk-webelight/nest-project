@@ -22,9 +22,12 @@ export class MediaEntity extends BaseEntity {
   @Column()
   filePath: string;
 
-  @Column({ nullable: true })
-  module?: string;
+  @Column({ type: "varchar", nullable: true })
+  module?: string | null;
 
-  @Column({ nullable: true })
-  recordId?: string;
+  @Column({ type: "varchar", nullable: true })
+  recordId?: string | null;
+
+  @Column({ type: "varchar", nullable: true })
+  publicId?: string | null;
 }

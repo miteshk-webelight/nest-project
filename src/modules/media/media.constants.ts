@@ -3,6 +3,11 @@ export const MEDIA_CONSTANTS = {
   MAX_FILE_SIZE: 5 * 1024 * 1024, // 5MB
   ALLOWED_MIME_TYPES: ["image/jpeg", "image/jpg", "image/png", "image/webp"],
   CLOUDINARY_FOLDER: "e-commerce/products",
+  ORPHAN_MEDIA_CLEANUP_HOURS: 24, // Media that is 24 Hours old are considered for clean up
+};
+
+export const CRON_CONSTANTS = {
+  ORPHAN_MEDIA_CLEANUP_CRON: "0 2 * * *", // 2 AM every midnight
 };
 
 export const ERROR_MESSAGES = {
@@ -18,6 +23,8 @@ export const SUCCESS_MESSAGES = {
 };
 export const MEDIA_SELECT_FIELDS = {
   MEDIA_ID: ["media.id"],
+  MEDIA_ID_AND_PATH: ["media.id", "media.filePath", "media.publicId"],
+  MEDIA_DETAILS: ["media.id", "media.createdBy", "media.recordId", "media.module"],
 };
 export enum MediaModuleEnum {
   PRODUCT = "PRODUCT",

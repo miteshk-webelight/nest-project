@@ -1,4 +1,7 @@
 import type { MediaEntity } from "../media/media.entity";
+import type { UpdateProductDto } from "./dto/update-product.dto";
+import type { ProductEntity } from "./product.entity";
+import type { Repository } from "typeorm";
 
 export interface ProductWithMedia {
   id: string;
@@ -26,3 +29,12 @@ export interface ProductWithMedia {
 
   media: MediaEntity[];
 }
+
+export type ValidateProductUpdateParams = {
+  dto: UpdateProductDto;
+  product: ProductEntity;
+  productId: string;
+  vendorId: string;
+  productRepository: Repository<ProductEntity>;
+  validateCategoryExistsAndActive: (categoryId: string) => Promise<void>;
+};

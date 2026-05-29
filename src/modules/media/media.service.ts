@@ -39,6 +39,7 @@ export class MediaService {
           filename: file.originalname,
           mimeType: file.mimetype,
           size: file.size,
+          publicId: uploadResult.public_id,
           filePath: uploadResult.secure_url,
         });
 
@@ -157,6 +158,33 @@ export class MediaService {
       })
       .andWhere("media.recordId = :recordId", {
         recordId,
+      })
+      .getMany();
+  }
+
+  async detachMediaFromRecord(mediaIds: string[], queryRunner: QueryRunner): Promise<void> {
+    const mediaRepository = queryRunner.manager.getRepository(MediaEntity);
+    await mediaRepository
+      .createQueryBuilder()
+      .update(MediaEntity)
+      .set({
+        module: null,
+        recordId: null,
+      })
+      .where("id IN (:...mediaIds)", {
+        mediaIds,
+      })
+      .execute();
+  }
+
+  async getAvailableMediaByIds(mediaIds: string[]): Promise<MediaEntity[]> {
+    const mediaRepository = this.databaseService.getRepository(MediaEntity);
+
+    return await mediaRepository
+      .createQueryBuilder("media")
+      .select(MEDIA_SELECT_FIELDS.MEDIA_DETAILS)
+      .where("media.id IN (:...mediaIds)", {
+        mediaIds,
       })
       .getMany();
   }

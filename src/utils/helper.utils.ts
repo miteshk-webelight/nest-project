@@ -1,4 +1,5 @@
 import { type ClassConstructor, plainToInstance } from "class-transformer";
+import { ulid } from "ulid";
 
 import type { ObjectLiteral } from "typeorm";
 import type { SelectQueryBuilder } from "typeorm/query-builder/SelectQueryBuilder";
@@ -24,7 +25,7 @@ export function generateSlug(name: string, randomSuffix?: boolean): string {
     .replace(/\s+/g, "-");
 
   if (randomSuffix) {
-    const random = Math.floor(Math.random() * 10000);
+    const random = ulid().slice(-6).toLowerCase();
 
     slug += `-${random}`;
   }

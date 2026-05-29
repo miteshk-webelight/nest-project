@@ -55,3 +55,11 @@ export const clearProductListCache = async (redisService: RedisService): Promise
     await redisService.delete(keysToRemove);
   }
 };
+
+export const clearProductDetailsCache = async (redisService: RedisService, productId: string): Promise<void> => {
+  const detailKeys = await redisService.keys(getProductDetailsCacheKey(productId, "*"));
+
+  if (detailKeys.length > 0) {
+    await redisService.delete(detailKeys);
+  }
+};
