@@ -110,7 +110,7 @@ export function validateNewMediaIds(
   vendorUserId: string,
   availableMedia: MediaEntity[],
 ): void {
-  if (!newMediaIds || newMediaIds.length === 0) {
+  if (!newMediaIds?.length) {
     return;
   }
 

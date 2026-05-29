@@ -28,6 +28,7 @@ export const buildProductListCacheKey = (query: GetAllProductDto, approved = fal
     status = "",
     vendorId = "",
     name = "",
+    isDeleted = false,
   } = query as Required<GetAllProductDto>;
 
   const cacheParams = [
@@ -39,6 +40,7 @@ export const buildProductListCacheKey = (query: GetAllProductDto, approved = fal
     status || "",
     vendorId || "",
     name || "",
+    isDeleted || false,
     isPagination,
   ].join("-");
 

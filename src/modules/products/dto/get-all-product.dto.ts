@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from "@nestjs/swagger";
 
-import { IsEnum, IsOptional, MaxLength } from "class-validator";
+import { Transform } from "class-transformer";
+import { IsBoolean, IsEnum, IsOptional, MaxLength } from "class-validator";
 
 import { TrimString } from "src/decorators/trim-string.decorator";
 import { PaginationQueryDto } from "src/dto/pagination-query.dto";
@@ -25,4 +26,10 @@ export class GetAllProductDto extends PaginationQueryDto {
   @MaxLength(100)
   @IsOptional()
   name?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(({ value }) => value === "true")
+  @IsBoolean()
+  isDeleted?: boolean;
 }
