@@ -4,7 +4,6 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { QueryRunner, Repository, SelectQueryBuilder } from "typeorm";
 
 import { CommonSortByEnum, SortOrderEnum } from "src/constants/common.constants";
-import { handleServiceError } from "src/utils/service-error-handler";
 
 import { applyPagination, generateSlug } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
