@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
-import { Repository, SelectQueryBuilder } from "typeorm";
+import { QueryRunner, Repository, SelectQueryBuilder } from "typeorm";
 
 import { CommonSortByEnum, SortOrderEnum } from "src/constants/common.constants";
 import { handleServiceError } from "src/utils/service-error-handler";
@@ -12,7 +12,6 @@ import { DatabaseService } from "../database/database.service";
 import { ProductEntity } from "../products/product.entity";
 import { PRODUCT_SELECT_FIELDS } from "../products/products.constants";
 import { RedisService } from "../redis/redis.service";
-import { UsersEntity } from "../users/entity/users.entity";
 
 import { CATEGORY_CACHE_TTL, CATEGORY_SELECT_FIELDS, ERROR_MESSAGES } from "./categories.constants";
 import { CategoryAdminActionParams } from "./category-service.types";
@@ -46,43 +45,38 @@ export class CategoriesService {
     private readonly databaseService: DatabaseService,
   ) {}
 
-  async createCategory(dto: CreateCategoryDto, admin: UsersEntity): Promise<CategoryEntity | void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+  async createCategory(dto: CreateCategoryDto): Promise<CategoryEntity> {
+    const createdCategory = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
 
-    try {
-      const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
+        const slug = generateSlug(dto.name);
 
-      const slug = generateSlug(dto.name);
+        const existingCategory = await categoryRepository
+          .createQueryBuilder("category")
+          .where("category.name LIKE :name", { name: dto.name })
+          .orWhere("category.slug = :slug", { slug })
+          .getOne();
 
-      const existingCategory = await categoryRepository
-        .createQueryBuilder("category")
-        .where("category.name LIKE :name", { name: dto.name })
-        .orWhere("category.slug = :slug", { slug })
-        .getOne();
+        if (existingCategory) {
+          throw new ConflictException(ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS);
+        }
 
-      if (existingCategory) {
-        throw new ConflictException(ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS);
-      }
+        const category = categoryRepository.create({
+          ...dto,
+          slug,
+          isActive: true,
+        });
 
-      const category = categoryRepository.create({
-        ...dto,
-        slug,
-        isActive: true,
-      });
+        const savedCategory = await categoryRepository.save(category);
 
-      const savedCategory = await categoryRepository.save(category);
+        return savedCategory;
+      },
+      errorContext: "Create Category",
+    });
+    await this.clearCategoryCache(createdCategory.id, createdCategory.slug);
 
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await this.clearCategoryCache(savedCategory.id, slug);
-
-      return savedCategory;
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "createCategoryError");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+    return createdCategory;
   }
 
   private async findCategoryById(id: string): Promise<Partial<CategoryEntity>> {
@@ -130,89 +124,77 @@ export class CategoriesService {
     });
   }
 
-  async updateCategory({ id, dto, admin }: CategoryAdminActionParams<UpdateCategoryDto>): Promise<void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+  async updateCategory({ id, dto }: CategoryAdminActionParams<UpdateCategoryDto>): Promise<void> {
+    const updatedCategory = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
 
-    try {
-      const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
-
-      const category = await categoryRepository
-        .createQueryBuilder("category")
-        .select(CATEGORY_SELECT_FIELDS.MAIN)
-        .where("category.id = :id", { id })
-        .getOne();
-
-      if (!category) {
-        throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
-      }
-
-      validateCategoryUpdatePayload(dto);
-
-      if (dto.name) {
-        const newSlug = generateSlug(dto.name);
-
-        const existingCategory = await categoryRepository
+        const category = await categoryRepository
           .createQueryBuilder("category")
-          .select(["category.id", "category.name"])
-          .where("category.name LIKE :name", { name: dto.name })
-          .andWhere("category.id != :id", { id })
-          .andWhere("category.slug = :slug", { slug: newSlug })
+          .select(CATEGORY_SELECT_FIELDS.MAIN)
+          .where("category.id = :id", { id })
           .getOne();
 
-        validateCategoryUniqueFields(dto, existingCategory);
-
-        if (existingCategory) {
-          throw new ConflictException(ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS);
+        if (!category) {
+          throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
         }
 
-        Object.assign(category, { name: dto.name, slug: newSlug });
-      }
-      if (dto.description !== undefined) {
-        category.description = dto.description;
-      }
+        validateCategoryUpdatePayload(dto);
 
-      await categoryRepository.save(category);
+        if (dto.name) {
+          const newSlug = generateSlug(dto.name);
 
-      await this.databaseService.commitTransaction(queryRunner);
+          const existingCategory = await categoryRepository
+            .createQueryBuilder("category")
+            .select(CATEGORY_SELECT_FIELDS.ID_AND_NAME)
+            .where("category.name LIKE :name", { name: dto.name })
+            .andWhere("category.id != :id", { id })
+            .andWhere("category.slug = :slug", { slug: newSlug })
+            .getOne();
 
-      await this.clearCategoryCache(category.id, category.slug);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "updateCategoryError");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+          validateCategoryUniqueFields(dto, existingCategory);
+
+          if (existingCategory) {
+            throw new ConflictException(ERROR_MESSAGES.CATEGORY_ALREADY_EXISTS);
+          }
+
+          Object.assign(category, { name: dto.name, slug: newSlug });
+        }
+        if (dto.description !== undefined) {
+          category.description = dto.description;
+        }
+
+        return await categoryRepository.save(category);
+      },
+      errorContext: "Update Category",
+    });
+    await this.clearCategoryCache(updatedCategory.id, updatedCategory.slug);
   }
 
   async deleteCategory(id: string): Promise<void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+    const { categoryId, slug } = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
 
-    try {
-      const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
+        const category = await categoryRepository
+          .createQueryBuilder("category")
+          .select(CATEGORY_SELECT_FIELDS.ID_AND_SLUG)
+          .where("category.id = :id", { id })
+          .getOne();
 
-      const category = await categoryRepository
-        .createQueryBuilder("category")
-        .select(["category.id"])
-        .where("category.id = :id", { id })
-        .getOne();
+        if (!category) {
+          throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
+        }
 
-      if (!category) {
-        throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
-      }
+        await this.validateCategoryDeletion(id);
 
-      await this.validateCategoryDeletion(id);
+        await categoryRepository.softDelete(category.id);
 
-      await categoryRepository.softDelete(category.id);
-
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await this.clearCategoryCache(category.id, category.slug);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "deleteCategoryError");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+        return { categoryId: category.id, slug: category.slug };
+      },
+      errorContext: "Delete Category",
+    });
+    await this.clearCategoryCache(categoryId, slug);
   }
 
   private async validateCategoryDeletion(categoryId: string): Promise<void> {
@@ -227,38 +209,30 @@ export class CategoriesService {
     }
   }
 
-  async updateCategoryStatus({ id, dto, admin }: CategoryAdminActionParams<UpdateCategoryStatusDto>): Promise<void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+  async updateCategoryStatus({ id, dto }: CategoryAdminActionParams<UpdateCategoryStatusDto>): Promise<void> {
+    const updatedCategory = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
 
-    try {
-      const categoryRepository = queryRunner.manager.getRepository(CategoryEntity);
+        const category = await categoryRepository
+          .createQueryBuilder("category")
+          .select(CATEGORY_SELECT_FIELDS.MAIN)
+          .where("category.id = :id", { id })
+          .getOne();
 
-      const category = await categoryRepository
-        .createQueryBuilder("category")
-        .select(CATEGORY_SELECT_FIELDS.MAIN)
-        .where("category.id = :id", { id })
-        .getOne();
+        if (!category) {
+          throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
+        }
 
-      if (!category) {
-        throw new NotFoundException(ERROR_MESSAGES.CATEGORY_NOT_FOUND);
-      }
+        validateCategoryActivationTransition(category.isActive, dto.isActive);
 
-      validateCategoryActivationTransition(category.isActive, dto.isActive);
+        category.isActive = dto.isActive;
 
-      category.isActive = dto.isActive;
-
-      await categoryRepository.save(category);
-
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await this.clearCategoryCache(category.id, category.slug);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-
-      handleServiceError(error, "createCategoryStatusUpdateError");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+        return await categoryRepository.save(category);
+      },
+      errorContext: "Update Category Status",
+    });
+    await this.clearCategoryCache(updatedCategory.id, updatedCategory.slug);
   }
 
   async listCategories({
