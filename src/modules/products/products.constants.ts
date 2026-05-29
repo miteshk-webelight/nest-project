@@ -61,12 +61,14 @@ export const ERROR_MESSAGES = {
   NEW_MEDIA_NOT_OVERLAP_WITH_REMOVED_IDS: "New media IDs must not overlap with removed media IDs",
   YOU_CAN_ONLY_ATTACH_MEDIA_YOU_UPLOADED: "You can only attach media you uploaded",
   MEDIA_MUST_NOT_ATTACHED_TO_ANOTHER_RECORD: "Media must not be attached to another record",
+  SUSPENDED_PRODUCT_CANNOT_DELETED: "Product is suspended it cannot be deleted",
 };
 
 export const SUCCESS_MESSAGES = {
   PRODUCT_CREATED_SUCCESS: "Product created successfully",
   PRODUCT_UPDATED_SUCCESS: "Product updated successfully",
   PRODUCT_DELETED_SUCCESS: "Product deleted successfully",
+  PRODUCT_RESTORED_SUCCESS: "Product restored successfully",
   PRODUCT_SUBMITTED_SUCCESS: "Product submitted for approval",
   PRODUCT_APPROVED_SUCCESS: "Product approved successfully",
   PRODUCT_REJECTED_SUCCESS: "Product rejected successfully",

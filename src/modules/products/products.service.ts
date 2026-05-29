@@ -83,7 +83,7 @@ export class ProductsService {
       fetcher: async () => {
         const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
 
-        this.applyProductFilters(qb, query);
+        this.applyProductFilters(qb, query, true);
 
         return this.getProductListResponse<ProductListResponse>({
           qb,
@@ -100,10 +100,14 @@ export class ProductsService {
 
     const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
 
-    this.applyProductFilters(qb, {
-      ...query,
-      vendorId: vendorProfile.id,
-    });
+    this.applyProductFilters(
+      qb,
+      {
+        ...query,
+        vendorId: vendorProfile.id,
+      },
+      true,
+    );
 
     return this.getProductListResponse<ProductListResponse>({
       qb,
@@ -117,6 +121,7 @@ export class ProductsService {
         ...query,
         status: undefined,
         vendorId: undefined,
+        isDeleted: undefined,
       },
       true,
     );
@@ -217,8 +222,12 @@ export class ProductsService {
       .addSelect(PRODUCT_SELECT_FIELDS.MEDIA);
   }
 
-  private applyProductFilters(qb: SelectQueryBuilder<ProductEntity>, query: GetAllProductDto): void {
-    const { search, status, vendorId, name } = query;
+  private applyProductFilters(
+    qb: SelectQueryBuilder<ProductEntity>,
+    query: GetAllProductDto,
+    allowDeleted = false,
+  ): void {
+    const { search, status, vendorId, name, isDeleted } = query;
 
     if (search) {
       qb.andWhere("product.name ILIKE :search", {
@@ -242,6 +251,10 @@ export class ProductsService {
       qb.andWhere("product.vendorId = :vendorId", {
         vendorId,
       });
+    }
+
+    if (allowDeleted && isDeleted) {
+      qb.withDeleted().andWhere("product.deletedAt IS NOT NULL");
     }
   }
 
@@ -393,6 +406,80 @@ export class ProductsService {
     } catch (error) {
       await this.databaseService.rollbackTransaction(queryRunner);
       handleServiceError(error, "submitProductApprovalRequest");
+    } finally {
+      await this.databaseService.releaseQueryRunner(queryRunner);
+    }
+  }
+
+  async deleteProduct(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
+    if (!vendorProfile) {
+      throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+    }
+
+    const queryRunner = await this.databaseService.createQueryRunner();
+    try {
+      const product = await this.getProductForUpdate(
+        productId,
+        PRODUCT_SELECT_FIELDS.BASIC,
+        queryRunner,
+        vendorProfile.id,
+      );
+
+      if (!product) {
+        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+      }
+
+      if (product.status === ProductStatusEnum.SUSPENDED) {
+        throw new BadRequestException(ERROR_MESSAGES.SUSPENDED_PRODUCT_CANNOT_DELETED);
+      }
+
+      // TODO: we can put extra validation here for cart and active order after cart and order module
+      await queryRunner.manager.getRepository(ProductEntity).softDelete(productId);
+
+      await this.databaseService.commitTransaction(queryRunner);
+
+      await clearProductListCache(this.redisService);
+      await clearProductDetailsCache(this.redisService, productId);
+    } catch (error) {
+      await this.databaseService.rollbackTransaction(queryRunner);
+      handleServiceError(error, "updateProduct");
+    } finally {
+      await this.databaseService.releaseQueryRunner(queryRunner);
+    }
+  }
+
+  async restoreProduct(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
+    if (!vendorProfile) {
+      throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+    }
+
+    const queryRunner = await this.databaseService.createQueryRunner();
+    try {
+      const product = await queryRunner.manager
+        .getRepository(ProductEntity)
+        .createQueryBuilder("product")
+        .withDeleted()
+        .where("product.id = :productId", { productId })
+        .andWhere("product.vendorId = :vendorId", { vendorId: vendorProfile.id })
+        .getOne();
+
+      if (!product) {
+        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+      }
+
+      if (!product.deletedAt) {
+        throw new BadRequestException(ERROR_MESSAGES.PRODUCT_ALREADY_ACTIVE);
+      }
+
+      await queryRunner.manager.getRepository(ProductEntity).restore(productId);
+
+      await this.databaseService.commitTransaction(queryRunner);
+
+      await clearProductListCache(this.redisService);
+      await clearProductDetailsCache(this.redisService, productId);
+    } catch (error) {
+      await this.databaseService.rollbackTransaction(queryRunner);
+      handleServiceError(error, "restoreProduct");
     } finally {
       await this.databaseService.releaseQueryRunner(queryRunner);
     }

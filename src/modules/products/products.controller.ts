@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
@@ -233,6 +233,60 @@ export class ProductsController {
       });
     } catch (error) {
       logger.error("Error fetching products list:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, {
+    status: StatusCodes.OK,
+  })
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
+  @VendorStatus(VendorStatusEnum.APPROVED)
+  @RateLimit(60, 60)
+  @Delete(":id")
+  async deleteProduct(
+    @Res() res: Response,
+    @Req() req: Request,
+    @Param("id") productId: string,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.productsService.deleteProduct(productId, req.vendorProfile);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.PRODUCT_DELETED_SUCCESS,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error("Error Deleting product :", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, {
+    status: StatusCodes.OK,
+  })
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
+  @VendorStatus(VendorStatusEnum.APPROVED)
+  @RateLimit(60, 60)
+  @Patch(":id/restore")
+  async restoreProduct(
+    @Res() res: Response,
+    @Req() req: Request,
+    @Param("id") productId: string,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.productsService.restoreProduct(productId, req.vendorProfile);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.PRODUCT_RESTORED_SUCCESS,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error("Error restoring product :", error);
       return responseUtils.error({ res, error });
     }
   }

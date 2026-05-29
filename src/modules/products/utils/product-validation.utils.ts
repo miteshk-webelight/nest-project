@@ -58,6 +58,7 @@ export async function validateSkuUniquenessForUpdate(
 ): Promise<void> {
   const existingProduct = await productRepository
     .createQueryBuilder("product")
+    .withDeleted()
     .select(PRODUCT_SELECT_FIELDS.ID)
     .where("product.sku = :sku", { sku: newSku })
     .andWhere("product.vendorId = :vendorId", { vendorId })
