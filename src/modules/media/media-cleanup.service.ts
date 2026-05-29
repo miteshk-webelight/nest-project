@@ -29,8 +29,7 @@ export class MediaCleanupService {
       const orphanMedia = await mediaRepository
         .createQueryBuilder("media")
         .select(MEDIA_SELECT_FIELDS.MEDIA_ID_AND_PATH)
-        .where("media.recordId IS NULL")
-        .andWhere("media.module IS NULL")
+        .where("(media.recordId IS NULL OR media.module IS NULL)")
         .andWhere("media.createdAt < :cutoffDate", { cutoffDate })
         .getMany();
 
