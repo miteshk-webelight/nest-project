@@ -11,6 +11,8 @@ import { clsConfig } from "./config/cls.config";
 import { throttlerConfig } from "./config/throttle.config";
 import { AuthGuard } from "./guards/auth-guard";
 import { AuthModule } from "./modules/auth/auth.module";
+import { CartsModule } from "./modules/carts/carts.module";
+import { CartsService } from "./modules/carts/carts.service";
 import { CategoriesModule } from "./modules/categories/categories.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { FileManagementModule } from "./modules/fileManagment/fileManagment.module";
@@ -33,6 +35,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     ClsModule.forRoot(clsConfig),
     ProductsModule,
     ScheduleModule.forRoot(),
+    CartsModule,
   ],
   controllers: [AppController],
   providers: [
@@ -45,6 +48,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
       provide: APP_GUARD,
       useClass: RateLimitGuard,
     },
+    CartsService,
   ],
 })
 export class AppModule {}

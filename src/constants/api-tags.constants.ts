@@ -15,4 +15,5 @@ export enum ApiTag {
   Categories = "Categories",
   Products = "Products",
   Media = "Media",
+  Carts = "Carts",
 }
