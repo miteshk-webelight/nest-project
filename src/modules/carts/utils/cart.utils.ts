@@ -30,8 +30,7 @@ export const mapCartToResponse = (cart: CartEntity): CartResponse => {
       !!product &&
       product.status === ProductStatusEnum.APPROVED &&
       product.isActive &&
-      product.vendor.status === VendorStatusEnum.APPROVED &&
-      product.category.isActive;
+      product.vendor.status === VendorStatusEnum.APPROVED;
 
     return {
       productId: item.productId,
