@@ -1,28 +1,99 @@
-import { Controller, Post, Res } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Post, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
 
 import { ApiTag } from "src/constants/api-tags.constants";
 import { Public } from "src/decorators/public.decorator";
+import { OptionalAuthGuard } from "src/guards/optional-auth.guard";
+import { UsersEntity } from "src/modules/users/entity/users.entity";
 import { logger } from "src/services/logger.service";
 import responseUtils, { CommonResponseType } from "src/utils/response.utils";
 
 import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
+import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
 
+import { CART_HEADER_GUEST_TOKEN, SUCCESS_MESSAGES } from "./carts.constants";
 import { CartsService } from "./carts.service";
+import { AddCartItemDto } from "./dto/add-cart-item.dto";
+import { CartResponse } from "./response/cart.response";
 import { GuestSessionResponse } from "./response/guest-session.response";
 
-import type { Response } from "express";
+import type { Request, Response } from "express";
 
 @ApiTags(ApiTag.Carts)
 @Controller("carts")
 export class CartsController {
   constructor(private readonly cartsService: CartsService) {}
 
-  @ApiSwaggerResponse(GuestSessionResponse)
   @Public()
+  @ApiSwaggerResponse(MessageResponse)
+  @UseGuards(OptionalAuthGuard)
+  @Post("items")
+  async addCartItem(
+    @Headers(CART_HEADER_GUEST_TOKEN) guestToken: string,
+    @Req() req: Request,
+    @Body() dto: AddCartItemDto,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      const user = req.user as UsersEntity | undefined;
+      await this.cartsService.addCartItem({
+        dto,
+        guestToken,
+        user,
+      });
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.ITEM_ADDED_TO_CART,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error("Error adding product to cart:", error);
+
+      return responseUtils.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Public()
+  @ApiSwaggerResponse(CartResponse)
+  @UseGuards(OptionalAuthGuard)
+  @Get("me")
+  async getCurrentCart(
+    @Headers(CART_HEADER_GUEST_TOKEN) guestToken: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<CartResponse>>> {
+    try {
+      const user = req.user as UsersEntity | undefined;
+      const cartResponse = await this.cartsService.getCurrentCart({
+        guestToken,
+        user,
+      });
+
+      return responseUtils.success(res, {
+        data: cartResponse,
+        status: StatusCodes.OK,
+        transformWith: CartResponse,
+      });
+    } catch (error) {
+      logger.error("Error fetching current cart:", error);
+
+      return responseUtils.error({
+        res,
+        error,
+      });
+    }
+  }
+
+  @Public()
+  @ApiSwaggerResponse(GuestSessionResponse)
   @RateLimit(20, 60)
   @Post("guest-session")
   generateGuestSession(@Res() res: Response): Response<CommonResponseType<GuestSessionResponse>> {
