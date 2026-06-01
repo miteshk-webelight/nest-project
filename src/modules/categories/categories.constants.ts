@@ -38,5 +38,7 @@ export const CATEGORY_SELECT_FIELDS = {
     "category.isActive",
     "category.createdAt",
   ],
+  ID_AND_SLUG: ["category.id", "category.slug"],
+  ID_AND_NAME: ["category.id", "category.name"],
   MAIN: ["category.id", "category.slug", "category.isActive", "category.name"],
 };

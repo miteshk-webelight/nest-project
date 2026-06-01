@@ -1,7 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
 
-import { Repository } from "typeorm";
+import { QueryRunner } from "typeorm";
 
 import { DatabaseService } from "../database/database.service";
 import { RedisService } from "../redis/redis.service";
@@ -26,127 +25,110 @@ import {
 @Injectable()
 export class VendorsService {
   constructor(
-    @InjectRepository(VendorProfileEntity)
-    private readonly vendorProfileRepository: Repository<VendorProfileEntity>,
-
-    @InjectRepository(UsersEntity)
-    private readonly userRepository: Repository<UsersEntity>,
-
     private readonly redisService: RedisService,
 
     private readonly databaseService: DatabaseService,
   ) {}
 
   async registerAsVendor(user: UsersEntity, vendorDto: RegisterVendorDto): Promise<VendorProfileEntity> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+    const registeredVendor = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const userRepository = queryRunner.manager.getRepository(UsersEntity);
+        const existingUser = await userRepository.findOne({
+          where: {
+            id: user.id,
+          },
+        });
 
-    try {
-      const userRepository = queryRunner.manager.getRepository(UsersEntity);
+        if (!existingUser) {
+          throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
+        }
 
-      const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
+        const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
 
-      const existingUser = await userRepository.findOne({
-        where: {
-          id: user.id,
-        },
-      });
+        const existingApplication = await vendorRepository
+          .createQueryBuilder("vendor")
+          .where("vendor.userId = :userId", {
+            userId: existingUser.id,
+          })
+          // Prevent multiple active vendor applications
+          .andWhere("vendor.status IN (:...statuses)", {
+            statuses: [VendorStatusEnum.PENDING, VendorStatusEnum.APPROVED, VendorStatusEnum.SUSPENDED],
+          })
+          .getOne();
 
-      if (!existingUser) {
-        throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
-      }
+        if (existingApplication) {
+          throw new ConflictException(ERROR_MESSAGES.VENDOR_APPLICATION_ALREADY_EXISTS);
+        }
 
-      const existingApplication = await vendorRepository
-        .createQueryBuilder("vendor")
-        .where("vendor.userId = :userId", {
+        const vendorProfile = vendorRepository.create({
+          ...vendorDto,
           userId: existingUser.id,
-        })
-        // Prevent multiple active vendor applications
-        .andWhere("vendor.status IN (:...statuses)", {
-          statuses: [VendorStatusEnum.PENDING, VendorStatusEnum.APPROVED, VendorStatusEnum.SUSPENDED],
-        })
-        .getOne();
+          status: VendorStatusEnum.PENDING,
+        });
 
-      if (existingApplication) {
-        throw new ConflictException(ERROR_MESSAGES.VENDOR_APPLICATION_ALREADY_EXISTS);
-      }
+        const savedVendor = await vendorRepository.save(vendorProfile);
 
-      const vendorProfile = vendorRepository.create({
-        ...vendorDto,
-        userId: existingUser.id,
-        status: VendorStatusEnum.PENDING,
-      });
-
-      const savedVendor = await vendorRepository.save(vendorProfile);
-
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await this.clearVendorCache(existingUser.id);
-
-      return savedVendor;
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      throw error;
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+        return savedVendor;
+      },
+      errorContext: "Register as vendor",
+    });
+    await this.clearVendorCache(user.id);
+    return registeredVendor;
   }
 
   async updateVendorStatus(vendorId: string, status: VendorStatusEnum, admin: UsersEntity): Promise<void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+    const vendor = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
 
-    try {
-      const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
+        const userRepository = queryRunner.manager.getRepository(UsersEntity);
 
-      const userRepository = queryRunner.manager.getRepository(UsersEntity);
+        const vendorProfile = await vendorRepository
+          .createQueryBuilder("vendor")
+          .select(VENDOR_STATUS_UPDATE_SELECT_FIELDS)
+          .where("vendor.id = :vendorId", {
+            vendorId,
+          })
+          .getOne();
 
-      const vendorProfile = await vendorRepository
-        .createQueryBuilder("vendor")
-        .select(VENDOR_STATUS_UPDATE_SELECT_FIELDS)
-        .where("vendor.id = :vendorId", {
-          vendorId,
-        })
-        .getOne();
+        if (!vendorProfile) {
+          throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
+        }
 
-      if (!vendorProfile) {
-        throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
-      }
+        validateVendorStatusTransition(vendorProfile.status, status);
 
-      validateVendorStatusTransition(vendorProfile.status, status);
+        vendorProfile.status = status;
 
-      vendorProfile.status = status;
+        if (status === VendorStatusEnum.APPROVED) {
+          vendorProfile.approvedBy = admin.id;
+          vendorProfile.approvedAt = new Date();
+        } else {
+          vendorProfile.approvedBy = undefined;
+          vendorProfile.approvedAt = undefined;
+        }
 
-      if (status === VendorStatusEnum.APPROVED) {
-        vendorProfile.approvedBy = admin.id;
-        vendorProfile.approvedAt = new Date();
-      } else {
-        vendorProfile.approvedBy = undefined;
-        vendorProfile.approvedAt = undefined;
-      }
+        await vendorRepository.save(vendorProfile);
 
-      await vendorRepository.save(vendorProfile);
+        await userRepository.update(
+          {
+            id: vendorProfile.userId,
+          },
+          {
+            role: status === VendorStatusEnum.APPROVED ? UserRoleEnum.VENDOR : UserRoleEnum.USER,
+          },
+        );
 
-      await userRepository.update(
-        {
-          id: vendorProfile.userId,
-        },
-        {
-          role: status === VendorStatusEnum.APPROVED ? UserRoleEnum.VENDOR : UserRoleEnum.USER,
-        },
-      );
-
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await this.clearVendorCache(vendorProfile.userId);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      throw error;
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+        return vendorProfile;
+      },
+      errorContext: "Update Vendor Status",
+    });
+    await this.clearVendorCache(vendor.userId);
   }
 
   private async findVendorByUserId(userId: string): Promise<VendorProfileEntity> {
-    const vendor = await this.vendorProfileRepository
+    const vendor = await this.databaseService
+      .getRepository(VendorProfileEntity)
       .createQueryBuilder("vendor")
       .select(VENDOR_PROFILE_SELECT_FIELDS)
       .where("vendor.userId = :userId", {
@@ -174,7 +156,8 @@ export class VendorsService {
       key: getVendorStatusCacheKey(user.id),
       ttl: VENDOR_CACHE_TTL,
       fetcher: async () => {
-        const vendor = await this.vendorProfileRepository
+        const vendor = await this.databaseService
+          .getRepository(VendorProfileEntity)
           .createQueryBuilder("vendor")
           .select(VENDOR_STATUS_SELECT_FIELDS)
           .where("vendor.userId = :userId", {
@@ -194,20 +177,29 @@ export class VendorsService {
   }
 
   async updateMyVendorProfile(user: UsersEntity, dto: UpdateVendorProfileDto): Promise<void> {
-    const vendor = await this.findVendorByUserId(user.id);
+    await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
 
-    await this.validateVendorProfileUpdate(vendor.id, dto);
+        const userRepository = queryRunner.manager.getRepository(UsersEntity);
 
-    Object.assign(vendor, dto);
+        const vendor = await this.findVendorByUserId(user.id);
 
-    // Profile changes require admin re-approval
-    vendor.status = VendorStatusEnum.PENDING;
-    vendor.approvedBy = undefined;
-    vendor.approvedAt = undefined;
+        await this.validateVendorProfileUpdate(vendor.id, dto);
 
-    await this.vendorProfileRepository.save(vendor);
+        Object.assign(vendor, dto);
 
-    await this.userRepository.update({ id: user.id }, { role: UserRoleEnum.USER });
+        // Profile changes require admin re-approval
+        vendor.status = VendorStatusEnum.PENDING;
+        vendor.approvedBy = undefined;
+        vendor.approvedAt = undefined;
+
+        await vendorRepository.save(vendor);
+
+        await userRepository.update({ id: user.id }, { role: UserRoleEnum.USER });
+      },
+      errorContext: "Update Vendor Profile",
+    });
 
     await this.clearVendorCache(user.id);
   }
@@ -219,7 +211,8 @@ export class VendorsService {
   private async validateVendorProfileUpdate(vendorId: string, dto: UpdateVendorProfileDto): Promise<void> {
     validateVendorProfileUpdatePayload(dto);
 
-    const existingVendor = await this.vendorProfileRepository
+    const existingVendor = await this.databaseService
+      .getRepository(VendorProfileEntity)
       .createQueryBuilder("vendor")
       .select(["vendor.id", "vendor.businessEmail", "vendor.businessPhone"])
       .where(
@@ -243,44 +236,37 @@ export class VendorsService {
   }
 
   async deleteVendorProfile(userId: string): Promise<void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+    await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
 
-    try {
-      const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
+        const userRepository = queryRunner.manager.getRepository(UsersEntity);
 
-      const userRepository = queryRunner.manager.getRepository(UsersEntity);
+        const vendor = await vendorRepository.findOne({
+          where: {
+            userId,
+          },
+        });
 
-      const vendor = await vendorRepository.findOne({
-        where: {
-          userId,
-        },
-      });
+        if (!vendor) {
+          throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
+        }
 
-      if (!vendor) {
-        throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
-      }
+        // Remove vendor profile
+        await vendorRepository.softDelete(vendor.id);
 
-      // Remove vendor profile
-      await vendorRepository.softDelete(vendor.id);
-
-      // Downgrade role back to normal user
-      await userRepository.update(
-        {
-          id: userId,
-        },
-        {
-          role: UserRoleEnum.USER,
-        },
-      );
-
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await this.clearVendorCache(userId);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      throw error;
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+        // Downgrade role back to normal user
+        await userRepository.update(
+          {
+            id: userId,
+          },
+          {
+            role: UserRoleEnum.USER,
+          },
+        );
+      },
+      errorContext: "Delete Vendor Profile",
+    });
+    await this.clearVendorCache(userId);
   }
 }

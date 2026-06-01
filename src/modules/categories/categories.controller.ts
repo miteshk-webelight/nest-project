@@ -79,7 +79,7 @@ export class CategoriesController {
     @Body() dto: CreateCategoryDto,
   ): Promise<Response<CommonResponseType<CategoryResponse>>> {
     try {
-      const category = await this.categoriesService.createCategory(dto, req.user);
+      const category = await this.categoriesService.createCategory(dto);
 
       return responseUtils.success(res, {
         data: category,
@@ -124,7 +124,7 @@ export class CategoriesController {
     @Body() dto: UpdateCategoryDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.categoriesService.updateCategory({ id, dto, admin: req.user });
+      await this.categoriesService.updateCategory({ id, dto });
 
       return responseUtils.success(res, {
         data: {
@@ -170,7 +170,7 @@ export class CategoriesController {
     @Body() dto: UpdateCategoryStatusDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.categoriesService.updateCategoryStatus({ id, dto, admin: req.user });
+      await this.categoriesService.updateCategoryStatus({ id, dto });
 
       return responseUtils.success(res, {
         data: {

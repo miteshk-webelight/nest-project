@@ -3,7 +3,6 @@ import { BadRequestException, Injectable, NotFoundException } from "@nestjs/comm
 import { QueryRunner, SelectQueryBuilder } from "typeorm";
 
 import { SortOrderEnum } from "src/constants/common.constants";
-import { handleServiceError } from "src/utils/service-error-handler";
 
 import { applyPagination, generateSlug } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
@@ -83,7 +82,7 @@ export class ProductsService {
       fetcher: async () => {
         const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
 
-        this.applyProductFilters(qb, query, true);
+        this.applyProductFilters({ qb, query, allowDeleted: true });
 
         return this.getProductListResponse<ProductListResponse>({
           qb,
@@ -100,14 +99,14 @@ export class ProductsService {
 
     const qb = this.createProductListQuery(PRODUCT_SELECT_FIELDS.FULL);
 
-    this.applyProductFilters(
+    this.applyProductFilters({
       qb,
-      {
+      query: {
         ...query,
         vendorId: vendorProfile.id,
       },
-      true,
-    );
+      allowDeleted: true,
+    });
 
     return this.getProductListResponse<ProductListResponse>({
       qb,
@@ -140,10 +139,13 @@ export class ProductsService {
           })
           .andWhere("product.isActive = true");
 
-        this.applyProductFilters(qb, {
-          ...query,
-          status: undefined, // for public listing, we only show approved products, so ignore any status filter from query
-          vendorId: undefined, // for public listing, we don't filter by vendorId
+        this.applyProductFilters({
+          qb,
+          query: {
+            ...query,
+            status: undefined, // for public listing, we only show approved products, so ignore any status filter from query
+            vendorId: undefined, // for public listing, we don't filter by vendorId
+          },
         });
 
         return this.getProductListResponse<ProductPublicListResponse>({
@@ -222,11 +224,15 @@ export class ProductsService {
       .addSelect(PRODUCT_SELECT_FIELDS.MEDIA);
   }
 
-  private applyProductFilters(
-    qb: SelectQueryBuilder<ProductEntity>,
-    query: GetAllProductDto,
+  private applyProductFilters({
+    qb,
+    query,
     allowDeleted = false,
-  ): void {
+  }: {
+    qb: SelectQueryBuilder<ProductEntity>;
+    query: GetAllProductDto;
+    allowDeleted?: boolean;
+  }): void {
     const { search, status, vendorId, name, isDeleted } = query;
 
     if (search) {
@@ -295,7 +301,7 @@ export class ProductsService {
     } as unknown as T;
   }
 
-  async createProduct(dto: CreateProductDto, vendorProfile?: VendorProfileEntity): Promise<ProductWithMedia | void> {
+  async createProduct(dto: CreateProductDto, vendorProfile?: VendorProfileEntity): Promise<ProductWithMedia> {
     await this.validateCategoryExistsAndActive(dto.categoryId);
 
     validateProductPrice(dto.price, dto.discountPrice);
@@ -304,55 +310,51 @@ export class ProductsService {
       throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
     }
 
-    const queryRunner = await this.databaseService.createQueryRunner();
+    const newProduct = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        await this.mediaService.validateMediaIds(dto.mediaIds, queryRunner);
 
-    await this.mediaService.validateMediaIds(dto.mediaIds, queryRunner);
+        const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
-    try {
-      const productRepository = queryRunner.manager.getRepository(ProductEntity);
+        const vendorId = vendorProfile.id;
 
-      const vendorId = vendorProfile.id;
+        const existingSku = await productRepository
+          .createQueryBuilder("product")
+          .select(PRODUCT_SELECT_FIELDS.PRODUCT_ID)
+          .where("product.vendorId = :vendorId", {
+            vendorId,
+          })
+          .andWhere("product.sku = :sku", {
+            sku: dto.sku,
+          })
+          .getOne();
 
-      const existingSku = await productRepository
-        .createQueryBuilder("product")
-        .select(PRODUCT_SELECT_FIELDS.PRODUCT_ID)
-        .where("product.vendorId = :vendorId", {
+        validateSkuUniqueness(existingSku);
+
+        const slug = generateSlug(dto.name, true);
+
+        const { mediaIds, ...productData } = dto;
+
+        const product = productRepository.create({
+          ...productData,
           vendorId,
-        })
-        .andWhere("product.sku = :sku", {
-          sku: dto.sku,
-        })
-        .getOne();
+          slug,
+          status: ProductStatusEnum.DRAFT,
+          isActive: false,
+        });
 
-      validateSkuUniqueness(existingSku);
+        const savedProduct = await productRepository.save(product);
 
-      const slug = generateSlug(dto.name, true);
+        await this.mediaService.attachMediaToRecord(mediaIds, MediaModuleEnum.PRODUCT, savedProduct.id, queryRunner);
+        const media = await this.mediaService.getMediaByRecord(MediaModuleEnum.PRODUCT, savedProduct.id);
 
-      const { mediaIds, ...productData } = dto;
+        return { ...savedProduct, media };
+      },
+      errorContext: "Create Product",
+    });
+    await clearProductListCache(this.redisService);
 
-      const product = productRepository.create({
-        ...productData,
-        vendorId,
-        slug,
-        status: ProductStatusEnum.DRAFT,
-        isActive: false,
-      });
-
-      const savedProduct = await productRepository.save(product);
-
-      await this.mediaService.attachMediaToRecord(mediaIds, MediaModuleEnum.PRODUCT, savedProduct.id, queryRunner);
-      await this.databaseService.commitTransaction(queryRunner);
-      const media = await this.mediaService.getMediaByRecord(MediaModuleEnum.PRODUCT, savedProduct.id);
-
-      await clearProductListCache(this.redisService);
-
-      return { ...savedProduct, media };
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "createProduct");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+    return newProduct;
   }
 
   private async getProductForUpdate(
@@ -376,39 +378,34 @@ export class ProductsService {
   }
 
   async submitProductApprovalRequest(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+    await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
-    try {
-      const productRepository = queryRunner.manager.getRepository(ProductEntity);
+        if (!vendorProfile) {
+          throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+        }
 
-      if (!vendorProfile) {
-        throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
-      }
+        const vendorId = vendorProfile.id;
 
-      const vendorId = vendorProfile.id;
+        const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner, vendorId);
 
-      const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner, vendorId);
+        if (!product) {
+          throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+        }
 
-      if (!product) {
-        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
-      }
+        if (product.status !== ProductStatusEnum.DRAFT) {
+          throw new BadRequestException(ERROR_MESSAGES.INVALID_PRODUCT_STATUS_TRANSITION);
+        }
 
-      if (product.status !== ProductStatusEnum.DRAFT) {
-        throw new BadRequestException(ERROR_MESSAGES.INVALID_PRODUCT_STATUS_TRANSITION);
-      }
+        product.status = ProductStatusEnum.PENDING;
 
-      product.status = ProductStatusEnum.PENDING;
+        await productRepository.save(product);
+      },
+      errorContext: "Submit Product Approval Request",
+    });
 
-      await productRepository.save(product);
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await clearProductListCache(this.redisService);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "submitProductApprovalRequest");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+    await clearProductListCache(this.redisService);
   }
 
   async deleteProduct(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
@@ -416,36 +413,31 @@ export class ProductsService {
       throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
     }
 
-    const queryRunner = await this.databaseService.createQueryRunner();
-    try {
-      const product = await this.getProductForUpdate(
-        productId,
-        PRODUCT_SELECT_FIELDS.BASIC,
-        queryRunner,
-        vendorProfile.id,
-      );
+    await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const product = await this.getProductForUpdate(
+          productId,
+          PRODUCT_SELECT_FIELDS.BASIC,
+          queryRunner,
+          vendorProfile.id,
+        );
 
-      if (!product) {
-        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
-      }
+        if (!product) {
+          throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+        }
 
-      if (product.status === ProductStatusEnum.SUSPENDED) {
-        throw new BadRequestException(ERROR_MESSAGES.SUSPENDED_PRODUCT_CANNOT_DELETED);
-      }
+        if (product.status === ProductStatusEnum.SUSPENDED) {
+          throw new BadRequestException(ERROR_MESSAGES.SUSPENDED_PRODUCT_CANNOT_DELETED);
+        }
 
-      // TODO: we can put extra validation here for cart and active order after cart and order module
-      await queryRunner.manager.getRepository(ProductEntity).softDelete(productId);
+        // TODO: we can put extra validation here for cart and active order after cart and order module
+        await queryRunner.manager.getRepository(ProductEntity).softDelete(productId);
+      },
+      errorContext: "Delete Product",
+    });
 
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await clearProductListCache(this.redisService);
-      await clearProductDetailsCache(this.redisService, productId);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "updateProduct");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+    await clearProductListCache(this.redisService);
+    await clearProductDetailsCache(this.redisService, productId);
   }
 
   async restoreProduct(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
@@ -453,36 +445,31 @@ export class ProductsService {
       throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
     }
 
-    const queryRunner = await this.databaseService.createQueryRunner();
-    try {
-      const product = await queryRunner.manager
-        .getRepository(ProductEntity)
-        .createQueryBuilder("product")
-        .withDeleted()
-        .where("product.id = :productId", { productId })
-        .andWhere("product.vendorId = :vendorId", { vendorId: vendorProfile.id })
-        .getOne();
+    await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const product = await queryRunner.manager
+          .getRepository(ProductEntity)
+          .createQueryBuilder("product")
+          .withDeleted()
+          .where("product.id = :productId", { productId })
+          .andWhere("product.vendorId = :vendorId", { vendorId: vendorProfile.id })
+          .getOne();
 
-      if (!product) {
-        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
-      }
+        if (!product) {
+          throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+        }
 
-      if (!product.deletedAt) {
-        throw new BadRequestException(ERROR_MESSAGES.PRODUCT_ALREADY_ACTIVE);
-      }
+        if (!product.deletedAt) {
+          throw new BadRequestException(ERROR_MESSAGES.PRODUCT_ALREADY_ACTIVE);
+        }
 
-      await queryRunner.manager.getRepository(ProductEntity).restore(productId);
+        await queryRunner.manager.getRepository(ProductEntity).restore(productId);
+      },
+      errorContext: "Restore Product",
+    });
 
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await clearProductListCache(this.redisService);
-      await clearProductDetailsCache(this.redisService, productId);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "restoreProduct");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+    await clearProductListCache(this.redisService);
+    await clearProductDetailsCache(this.redisService, productId);
   }
 
   async updateProduct(productId: string, dto: UpdateProductDto, vendorProfile?: VendorProfileEntity): Promise<void> {
@@ -492,88 +479,76 @@ export class ProductsService {
       throw new BadRequestException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
     }
 
-    const vendorId = vendorProfile.id;
-    const queryRunner = await this.databaseService.createQueryRunner();
+    await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const vendorId = vendorProfile.id;
+        const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
-    try {
-      const productRepository = queryRunner.manager.getRepository(ProductEntity);
+        const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.FULL, queryRunner, vendorId);
 
-      const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.FULL, queryRunner, vendorId);
+        if (!product) {
+          throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+        }
 
-      if (!product) {
-        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
-      }
+        if (product.status === ProductStatusEnum.SUSPENDED) {
+          throw new BadRequestException(ERROR_MESSAGES.PRODUCT_CANNOT_BE_MODIFIED);
+        }
 
-      if (product.status === ProductStatusEnum.SUSPENDED) {
-        throw new BadRequestException(ERROR_MESSAGES.PRODUCT_CANNOT_BE_MODIFIED);
-      }
+        await validateProductMediaUpdates({
+          dto,
+          productId,
+          vendorUserId: vendorProfile.userId,
+          mediaService: this.mediaService,
+        });
 
-      await validateProductMediaUpdates({
-        dto,
-        productId,
-        vendorUserId: vendorProfile.userId,
-        mediaService: this.mediaService,
-      });
+        await validateProductUpdate({
+          dto,
+          product,
+          productId,
+          vendorId,
+          productRepository,
+          validateCategoryExistsAndActive: this.validateCategoryExistsAndActive.bind(this),
+        });
 
-      await validateProductUpdate({
-        dto,
-        product,
-        productId,
-        vendorId,
-        productRepository,
-        validateCategoryExistsAndActive: this.validateCategoryExistsAndActive.bind(this),
-      });
+        applyProductUpdates(dto, product);
 
-      applyProductUpdates(dto, product);
+        await productRepository.save(product);
 
-      await productRepository.save(product);
+        await syncProductMedia({
+          dto,
+          productId,
+          mediaService: this.mediaService,
+          queryRunner,
+        });
+      },
+      errorContext: "Update Product",
+    });
 
-      await syncProductMedia({
-        dto,
-        productId,
-        mediaService: this.mediaService,
-        queryRunner,
-      });
-
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await clearProductListCache(this.redisService);
-      await clearProductDetailsCache(this.redisService, productId);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "updateProduct");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+    await clearProductListCache(this.redisService);
+    await clearProductDetailsCache(this.redisService, productId);
   }
 
   async updateProductStatus(productId: string, status: ProductStatusEnum, user: UsersEntity): Promise<void> {
-    const queryRunner = await this.databaseService.createQueryRunner();
+    await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
-    try {
-      const productRepository = queryRunner.manager.getRepository(ProductEntity);
+        const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner);
 
-      const product = await this.getProductForUpdate(productId, PRODUCT_SELECT_FIELDS.STATUS, queryRunner);
+        if (!product) {
+          throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+        }
 
-      if (!product) {
-        throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
-      }
+        validateProductStatusTransition(product.status, status);
 
-      validateProductStatusTransition(product.status, status);
+        product.status = status;
+        product.reviewedBy = user.id;
+        product.reviewedAt = new Date();
 
-      product.status = status;
-      product.reviewedBy = user.id;
-      product.reviewedAt = new Date();
-
-      await productRepository.save(product);
-      await this.databaseService.commitTransaction(queryRunner);
-
-      await clearProductListCache(this.redisService);
-    } catch (error) {
-      await this.databaseService.rollbackTransaction(queryRunner);
-      handleServiceError(error, "updateProductStatus");
-    } finally {
-      await this.databaseService.releaseQueryRunner(queryRunner);
-    }
+        await productRepository.save(product);
+      },
+      errorContext: "Update product status",
+    });
+    await clearProductListCache(this.redisService);
   }
 }

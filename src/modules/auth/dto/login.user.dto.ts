@@ -1,24 +1,10 @@
-import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional, OmitType } from "@nestjs/swagger";
 
 import { Transform } from "class-transformer";
 import { IsEmail, IsNotEmpty, IsOptional, IsPhoneNumber } from "class-validator";
 
 import { ERROR_MESSAGES } from "../../../constants/app.constants";
 import { TrimString } from "../../../decorators/trim-string.decorator";
-
-export class LoginUserDto {
-  @ApiProperty()
-  @IsNotEmpty()
-  @TrimString()
-  @IsEmail({}, { message: ERROR_MESSAGES.INVALID_EMAIL_ADDRESS })
-  @Transform(({ value }) => (typeof value === "string" ? value.toLowerCase() : value))
-  email: string;
-
-  @ApiProperty()
-  @TrimString()
-  @IsNotEmpty()
-  password: string;
-}
 
 export class SignupUserDto {
   @ApiProperty()
@@ -49,3 +35,5 @@ export class SignupUserDto {
   @IsNotEmpty()
   password: string;
 }
+
+export class LoginUserDto extends OmitType(SignupUserDto, ["firstName", "lastName", "phoneNumber"] as const) {}

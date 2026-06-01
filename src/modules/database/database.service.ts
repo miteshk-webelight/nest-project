@@ -3,6 +3,8 @@ import { InjectDataSource } from "@nestjs/typeorm";
 
 import { DataSource, EntityTarget, ObjectLiteral, QueryRunner, Repository } from "typeorm";
 
+import { handleServiceError } from "src/utils/service-error-handler";
+
 @Injectable()
 export class DatabaseService {
   constructor(
@@ -34,5 +36,38 @@ export class DatabaseService {
 
   async releaseQueryRunner(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.release();
+  }
+
+  async executeTransaction<T>({
+    operation,
+    errorContext = "Unknown Error",
+  }: {
+    operation: (queryRunner: QueryRunner) => Promise<T>;
+    errorContext?: string;
+  }): Promise<T> {
+    const queryRunner = this.dataSource.createQueryRunner();
+
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const result = await operation(queryRunner);
+
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.commitTransaction();
+      }
+
+      return result;
+    } catch (error) {
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+
+      handleServiceError(error, errorContext);
+
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }
