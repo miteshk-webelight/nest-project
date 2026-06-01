@@ -53,11 +53,15 @@ export class DatabaseService {
     try {
       const result = await operation(queryRunner);
 
-      await queryRunner.commitTransaction();
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.commitTransaction();
+      }
 
       return result;
     } catch (error) {
-      await queryRunner.rollbackTransaction();
+      if (queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
 
       handleServiceError(error, errorContext);
 
