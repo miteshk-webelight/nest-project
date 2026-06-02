@@ -79,7 +79,7 @@ export class CartsService {
             .where("id = :id", { id: existingCartItem.id })
             .execute();
         } else {
-          await queryRunner.manager.insert(CartItemEntity, {
+          const cartItem = queryRunner.manager.create(CartItemEntity, {
             cartId: cart.id,
             productId: dto.productId,
             quantity: dto.quantity,
@@ -88,7 +88,95 @@ export class CartsService {
             slugSnapshot: product.slug,
             nameSnapshot: product.name,
           });
+
+          await queryRunner.manager.save(cartItem);
         }
+      },
+    });
+
+    await clearCartCache({
+      redisService: this.redisService,
+      userId: cartOwner.userId,
+      guestToken: cartOwner.guestToken,
+    });
+  }
+
+  async updateCartItem({
+    productId,
+    quantity,
+    guestToken,
+    user,
+  }: {
+    productId: string;
+    quantity: number;
+    guestToken?: string;
+    user?: UsersEntity;
+  }): Promise<void> {
+    const cartOwner = resolveCartOwner({ user, guestToken });
+
+    await this.databaseService.executeTransaction({
+      errorContext: "Update Cart Item",
+      operation: async (queryRunner: QueryRunner) => {
+        const { cartItem } = await this.getCartItemOrFail({
+          queryRunner,
+          productId,
+          userId: cartOwner.userId,
+          guestToken: cartOwner.guestToken,
+        });
+
+        if (quantity <= 0) {
+          await queryRunner.manager.delete(CartItemEntity, {
+            id: cartItem.id,
+          });
+
+          return;
+        }
+
+        const product = await this.getAvailableProduct({
+          queryRunner,
+          productId,
+        });
+
+        validateStock({
+          requestedQuantity: quantity,
+          stock: product.stock,
+        });
+
+        await queryRunner.manager.update(CartItemEntity, { id: cartItem.id }, { quantity });
+      },
+    });
+
+    await clearCartCache({
+      redisService: this.redisService,
+      userId: cartOwner.userId,
+      guestToken: cartOwner.guestToken,
+    });
+  }
+
+  async removeCartItem({
+    productId,
+    guestToken,
+    user,
+  }: {
+    productId: string;
+    guestToken?: string;
+    user?: UsersEntity;
+  }): Promise<void> {
+    const cartOwner = resolveCartOwner({ user, guestToken });
+
+    await this.databaseService.executeTransaction({
+      errorContext: "Remove Cart Item",
+      operation: async (queryRunner: QueryRunner) => {
+        const { cartItem } = await this.getCartItemOrFail({
+          queryRunner,
+          productId,
+          userId: cartOwner.userId,
+          guestToken: cartOwner.guestToken,
+        });
+
+        await queryRunner.manager.delete(CartItemEntity, {
+          id: cartItem.id,
+        });
       },
     });
 
@@ -141,10 +229,12 @@ export class CartsService {
       return cart;
     }
 
-    return queryRunner.manager.save(CartEntity, {
+    const newCart = queryRunner.manager.create(CartEntity, {
       userId,
       guestToken,
     });
+
+    return queryRunner.manager.save(newCart);
   }
 
   private async findCartItem({
@@ -197,6 +287,46 @@ export class CartsService {
     }
 
     return product;
+  }
+
+  private async getCartItemOrFail({
+    queryRunner,
+    productId,
+    userId,
+    guestToken,
+  }: {
+    queryRunner: QueryRunner;
+    productId: string;
+    userId?: string;
+    guestToken?: string;
+  }): Promise<{
+    cart: CartEntity;
+    cartItem: CartItemEntity;
+  }> {
+    const cart = await this.findCartByOwner({
+      queryRunner,
+      userId,
+      guestToken,
+    });
+
+    if (!cart) {
+      throw new NotFoundException(ERROR_MESSAGES.CART_NOT_FOUND);
+    }
+
+    const cartItem = await this.findCartItem({
+      queryRunner,
+      cartId: cart.id,
+      productId,
+    });
+
+    if (!cartItem) {
+      throw new NotFoundException(ERROR_MESSAGES.CART_ITEM_NOT_FOUND);
+    }
+
+    return {
+      cart,
+      cartItem,
+    };
   }
 
   private async findCartByOwner({
