@@ -33,7 +33,19 @@ export async function getCachedCart<T>({
 }
 
 export async function clearCartCache({ redisService, userId, guestToken }: ClearCartCacheParams): Promise<void> {
-  const key = getCartCacheKey({ userId, guestToken });
+  const keys: string[] = [];
 
-  await redisService.delete([key]);
+  if (userId) {
+    keys.push(getUserCartCacheKey(userId));
+  }
+
+  if (guestToken) {
+    keys.push(getGuestCartCacheKey(guestToken));
+  }
+
+  if (!keys.length) {
+    throw new Error(ERROR_MESSAGES.CART_OWNER_MISMATCH);
+  }
+
+  await redisService.delete(keys);
 }

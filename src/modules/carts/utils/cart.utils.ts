@@ -1,6 +1,8 @@
 import { ProductStatusEnum } from "src/modules/products/products.constants";
 import { VendorStatusEnum } from "src/modules/vendors/vendors.constants";
 
+import type { MergeInstruction } from "../carts.types";
+import type { CartItemEntity } from "../entities/cart-items.entity";
 import type { CartEntity } from "../entities/carts.entity";
 import type { CartItemResponse } from "../response/cart-item.response";
 import type { CartResponse } from "../response/cart.response";
@@ -45,4 +47,39 @@ export const mapCartToResponse = (cart: CartEntity): CartResponse => {
   });
 
   return buildCartResponse(cart.id, items);
+};
+
+export const buildMergeInstructions = (
+  userItems: CartItemEntity[],
+  guestItems: CartItemEntity[],
+  availableProducts: ProductEntity[],
+): MergeInstruction[] => {
+  const productById = new Map(availableProducts.map((p) => [p.id, p]));
+  const userItemByProductId = new Map(userItems.map((item) => [item.productId, item]));
+  const instructions: MergeInstruction[] = [];
+
+  for (const guestItem of guestItems) {
+    const product = productById.get(guestItem.productId);
+
+    // If product is unavailable, skip it
+    if (!product) continue;
+
+    const userItem = userItemByProductId.get(guestItem.productId);
+    const mergedQuantity = (userItem?.quantity ?? 0) + guestItem.quantity;
+
+    // Cap merged quantity to currently available stock.
+    const finalQuantity = Math.min(Number(product.stock), mergedQuantity);
+
+    if (userItem) {
+      if (finalQuantity <= 0) {
+        instructions.push({ action: "DELETE_USER_ITEM", itemId: userItem.id });
+      } else {
+        instructions.push({ action: "UPDATE_USER_ITEM", itemId: userItem.id, finalQuantity });
+      }
+    } else if (finalQuantity > 0) {
+      instructions.push({ action: "MIGRATE_GUEST_ITEM", itemId: guestItem.id, finalQuantity });
+    }
+  }
+
+  return instructions;
 };

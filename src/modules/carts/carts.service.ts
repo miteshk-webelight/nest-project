@@ -7,19 +7,34 @@ import { DatabaseService } from "../database/database.service";
 import { ProductEntity } from "../products/product.entity";
 import { ProductStatusEnum } from "../products/products.constants";
 import { RedisService } from "../redis/redis.service";
-import { UsersEntity } from "../users/entity/users.entity";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 import { VendorStatusEnum } from "../vendors/vendors.constants";
 
 import { GUEST_TOKEN_PREFIX, CART_SELECT_FIELDS, ERROR_MESSAGES } from "./carts.constants";
-import { CartOwner } from "./carts.types";
-import { AddCartItemDto } from "./dto/add-cart-item.dto";
+import {
+  AddCartItemParams,
+  CartItemLookupResult,
+  CartOwner,
+  ConvertGuestCartToUserParams,
+  FindAvailableProductsByIdsParams,
+  FindCartByOwnerParams,
+  FindCartItemParams,
+  FindCartItemsParams,
+  FindOrCreateCartParams,
+  GetAvailableProductParams,
+  GetCartItemOrFailParams,
+  GetCurrentCartParams,
+  MergeCartItemsParams,
+  MergeGuestCartToUserParams,
+  RemoveCartItemParams,
+  UpdateCartItemParams,
+} from "./carts.types";
 import { CartItemEntity } from "./entities/cart-items.entity";
 import { CartEntity } from "./entities/carts.entity";
 import { CartResponse } from "./response/cart.response";
 import { clearCartCache, getCachedCart } from "./utils/cart-cache.utils";
 import { resolveCartOwner, validateStock, validateGuestToken } from "./utils/cart-validation.utils";
-import { buildCartResponse, mapCartToResponse } from "./utils/cart.utils";
+import { buildCartResponse, buildMergeInstructions, mapCartToResponse } from "./utils/cart.utils";
 
 @Injectable()
 export class CartsService {
@@ -34,15 +49,7 @@ export class CartsService {
     };
   }
 
-  async addCartItem({
-    dto,
-    guestToken,
-    user,
-  }: {
-    dto: AddCartItemDto;
-    guestToken?: string;
-    user?: UsersEntity;
-  }): Promise<void> {
+  async addCartItem({ dto, guestToken, user }: AddCartItemParams): Promise<void> {
     const cartOwner = resolveCartOwner({ user, guestToken });
 
     await this.databaseService.executeTransaction({
@@ -101,17 +108,7 @@ export class CartsService {
     });
   }
 
-  async updateCartItem({
-    productId,
-    quantity,
-    guestToken,
-    user,
-  }: {
-    productId: string;
-    quantity: number;
-    guestToken?: string;
-    user?: UsersEntity;
-  }): Promise<void> {
+  async updateCartItem({ productId, quantity, guestToken, user }: UpdateCartItemParams): Promise<void> {
     const cartOwner = resolveCartOwner({ user, guestToken });
 
     await this.databaseService.executeTransaction({
@@ -153,15 +150,7 @@ export class CartsService {
     });
   }
 
-  async removeCartItem({
-    productId,
-    guestToken,
-    user,
-  }: {
-    productId: string;
-    guestToken?: string;
-    user?: UsersEntity;
-  }): Promise<void> {
+  async removeCartItem({ productId, guestToken, user }: RemoveCartItemParams): Promise<void> {
     const cartOwner = resolveCartOwner({ user, guestToken });
 
     await this.databaseService.executeTransaction({
@@ -187,7 +176,7 @@ export class CartsService {
     });
   }
 
-  async getCurrentCart({ guestToken, user }: { guestToken?: string; user?: UsersEntity }): Promise<CartResponse> {
+  async getCurrentCart({ guestToken, user }: GetCurrentCartParams): Promise<CartResponse> {
     if (!user && !guestToken) {
       return buildCartResponse(null, []);
     }
@@ -214,15 +203,79 @@ export class CartsService {
     });
   }
 
-  private async findOrCreateCart({
-    queryRunner,
-    userId,
-    guestToken,
-  }: {
-    queryRunner: QueryRunner;
-    userId?: string;
-    guestToken?: string;
-  }): Promise<CartEntity> {
+  async mergeGuestCartToUser({ userId, guestToken, isNewUser }: MergeGuestCartToUserParams): Promise<void> {
+    if (!guestToken) {
+      return;
+    }
+
+    const validatedGuestToken = validateGuestToken(guestToken);
+
+    const shouldClearCache = await this.databaseService.executeTransaction({
+      errorContext: "Merge Guest Cart To User",
+      operation: async (queryRunner: QueryRunner) => {
+        const guestCart = await this.findCartByOwner({
+          queryRunner,
+          guestToken: validatedGuestToken,
+        });
+
+        if (!guestCart) {
+          return false;
+        }
+
+        const guestItems = await this.findCartItems({
+          queryRunner,
+          cartId: guestCart.id,
+        });
+
+        if (!guestItems.length) {
+          await queryRunner.manager.delete(CartEntity, { id: guestCart.id });
+
+          return true;
+        }
+
+        const userCart = await this.findCartByOwner({
+          queryRunner,
+          userId,
+        });
+
+        if (isNewUser || !userCart) {
+          await this.convertGuestCartToUser({
+            queryRunner,
+            cartId: guestCart.id,
+            userId,
+          });
+
+          return true;
+        }
+
+        const userItems = await this.findCartItems({
+          queryRunner,
+          cartId: userCart.id,
+        });
+
+        await this.mergeCartItems({
+          queryRunner,
+          userCartId: userCart.id,
+          userItems,
+          guestItems,
+        });
+
+        await queryRunner.manager.delete(CartEntity, { id: guestCart.id });
+
+        return true;
+      },
+    });
+
+    if (shouldClearCache) {
+      await clearCartCache({
+        redisService: this.redisService,
+        userId,
+        guestToken: validatedGuestToken,
+      });
+    }
+  }
+
+  private async findOrCreateCart({ queryRunner, userId, guestToken }: FindOrCreateCartParams): Promise<CartEntity> {
     const cart = await this.findCartByOwner({ queryRunner, userId, guestToken });
 
     if (cart) {
@@ -237,15 +290,7 @@ export class CartsService {
     return queryRunner.manager.save(newCart);
   }
 
-  private async findCartItem({
-    queryRunner,
-    cartId,
-    productId,
-  }: {
-    queryRunner: QueryRunner;
-    cartId: string;
-    productId: string;
-  }): Promise<CartItemEntity | null> {
+  private async findCartItem({ queryRunner, cartId, productId }: FindCartItemParams): Promise<CartItemEntity | null> {
     return queryRunner.manager
       .getRepository(CartItemEntity)
       .createQueryBuilder("cartItem")
@@ -255,13 +300,7 @@ export class CartsService {
       .getOne();
   }
 
-  private async getAvailableProduct({
-    queryRunner,
-    productId,
-  }: {
-    queryRunner: QueryRunner;
-    productId: string;
-  }): Promise<ProductEntity> {
+  private async getAvailableProduct({ queryRunner, productId }: GetAvailableProductParams): Promise<ProductEntity> {
     const product = await queryRunner.manager
       .getRepository(ProductEntity)
       .createQueryBuilder("product")
@@ -289,20 +328,104 @@ export class CartsService {
     return product;
   }
 
+  private async findAvailableProductsByIds({
+    queryRunner,
+    productIds,
+  }: FindAvailableProductsByIdsParams): Promise<ProductEntity[]> {
+    if (!productIds.length) {
+      return [];
+    }
+
+    return queryRunner.manager
+      .getRepository(ProductEntity)
+      .createQueryBuilder("product")
+      .select(CART_SELECT_FIELDS.PRODUCT)
+      .innerJoin(VendorProfileEntity, "vendor", "vendor.id = product.vendorId AND vendor.status = :vendorStatus", {
+        vendorStatus: VendorStatusEnum.APPROVED,
+      })
+      .where(` product.id IN (:...productIds) AND product.status = :status AND product.isActive = true`, {
+        productIds,
+        status: ProductStatusEnum.APPROVED,
+      })
+      .getMany();
+  }
+
+  private async findCartItems({ queryRunner, cartId }: FindCartItemsParams): Promise<CartItemEntity[]> {
+    return queryRunner.manager
+      .getRepository(CartItemEntity)
+      .createQueryBuilder("cartItem")
+      .select(CART_SELECT_FIELDS.CART_ITEM)
+      .where("cartItem.cartId = :cartId", { cartId })
+      .getMany();
+  }
+
+  private async convertGuestCartToUser({ queryRunner, cartId, userId }: ConvertGuestCartToUserParams): Promise<void> {
+    await queryRunner.manager
+      .createQueryBuilder()
+      .update(CartEntity)
+      .set({
+        userId,
+        guestToken: null,
+      })
+      .where("id = :cartId", { cartId })
+      .execute();
+  }
+
+  private async mergeCartItems({
+    queryRunner,
+    userCartId,
+    userItems,
+    guestItems,
+  }: MergeCartItemsParams): Promise<void> {
+    const productIds = [...new Set(guestItems.map((item) => item.productId))];
+
+    // only merge the products that are currently purchasable
+    const products = await this.findAvailableProductsByIds({
+      queryRunner,
+      productIds,
+    });
+
+    const mergeInstructions = buildMergeInstructions(userItems, guestItems, products);
+
+    for (const instruction of mergeInstructions) {
+      switch (instruction.action) {
+        case "DELETE_USER_ITEM":
+          // Remove items that are no longer valid after stock reconciliation.
+          await queryRunner.manager.delete(CartItemEntity, { id: instruction.itemId });
+          break;
+
+        case "UPDATE_USER_ITEM":
+          // Update existing user cart quantities using the merged value.
+          await queryRunner.manager
+            .createQueryBuilder()
+            .update(CartItemEntity)
+            .set({ quantity: instruction.finalQuantity })
+            .where("id = :id", { id: instruction.itemId })
+            .execute();
+          break;
+
+        case "MIGRATE_GUEST_ITEM":
+          // Move guest cart items into the user's cart.
+          await queryRunner.manager
+            .createQueryBuilder()
+            .update(CartItemEntity)
+            .set({
+              cartId: userCartId,
+              quantity: instruction.finalQuantity,
+            })
+            .where("id = :id", { id: instruction.itemId })
+            .execute();
+          break;
+      }
+    }
+  }
+
   private async getCartItemOrFail({
     queryRunner,
     productId,
     userId,
     guestToken,
-  }: {
-    queryRunner: QueryRunner;
-    productId: string;
-    userId?: string;
-    guestToken?: string;
-  }): Promise<{
-    cart: CartEntity;
-    cartItem: CartItemEntity;
-  }> {
+  }: GetCartItemOrFailParams): Promise<CartItemLookupResult> {
     const cart = await this.findCartByOwner({
       queryRunner,
       userId,
@@ -334,12 +457,7 @@ export class CartsService {
     guestToken,
     queryRunner,
     includeItems = false,
-  }: {
-    userId?: string;
-    guestToken?: string;
-    queryRunner?: QueryRunner;
-    includeItems?: boolean;
-  }): Promise<CartEntity | null> {
+  }: FindCartByOwnerParams): Promise<CartEntity | null> {
     const repository = queryRunner
       ? queryRunner.manager.getRepository(CartEntity)
       : this.databaseService.getRepository(CartEntity);
