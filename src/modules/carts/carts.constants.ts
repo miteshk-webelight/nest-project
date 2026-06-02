@@ -4,6 +4,9 @@ export const CART_CACHE_TTL = 120;
 
 export const CART_HEADER_GUEST_TOKEN = "x-guest-token";
 
+export const CART_CLEANUP_CRON = "0 0 */3 * *"; // Every 3rd day
+export const CART_INACTIVE_DAYS = 30;
+
 export const ERROR_MESSAGES = {
   MISSING_GUEST_TOKEN: "Guest token header is required for guest requests.",
   INVALID_GUEST_TOKEN: "Invalid guest token.",
@@ -27,6 +30,7 @@ export const SUCCESS_MESSAGES = {
 
 export const CART_SELECT_FIELDS = {
   CART: ["cart.id", "cart.userId", "cart.guestToken"],
+  CART_ID: ["cart.id"],
   CART_ITEM: [
     "cartItem.id",
     "cartItem.cartId",
