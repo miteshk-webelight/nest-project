@@ -1,10 +1,11 @@
-import { Body, Controller, Post, Req, Res, UnauthorizedException, UseGuards } from "@nestjs/common";
+import { Body, Controller, Headers, Post, Req, Res, UnauthorizedException } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { ApiTag } from "../../constants/api-tags.constants";
 import { Public } from "../../decorators/public.decorator";
 import { clearCookies, setAuthCookie, setRefreshTokenCookie } from "../../utils/cookie.utils";
 import responseUtils, { CommonResponseType } from "../../utils/response.utils";
+import { CART_HEADER_GUEST_TOKEN } from "../carts/carts.constants";
 import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
@@ -29,10 +30,11 @@ export class AuthController {
   async signup(
     @Res() res: Response,
     @Req() req: Request,
+    @Headers(CART_HEADER_GUEST_TOKEN) guestToken: string,
     @Body() user: SignupUserDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.authService.signup(user, res, req);
+      await this.authService.signup(user, res, req, guestToken);
       return responseUtils.success(res, {
         data: { message: SUCCESS_MESSAGES.USER_SIGNUP_SUCCESS },
       });
@@ -48,10 +50,11 @@ export class AuthController {
   async login(
     @Res() res: Response,
     @Req() req: Request,
+    @Headers(CART_HEADER_GUEST_TOKEN) guestToken: string,
     @Body() { email, password }: LoginUserDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.authService.login(email, password, res, req);
+      await this.authService.login(email, password, res, req, guestToken);
       return responseUtils.success(res, {
         data: { message: SUCCESS_MESSAGES.USER_LOGIN_SUCCESS },
       });

@@ -1,11 +1,11 @@
 import crypto from "crypto";
 
 import { BadRequestException, forwardRef, Inject, Injectable } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 import { InjectRepository } from "@nestjs/typeorm";
 
 import { Request, Response } from "express";
 import { Repository } from "typeorm";
-import { v4 as uuid } from "uuid";
 
 import { appConfig } from "../../config/app.config";
 import { AuthHelperService } from "../../modules/auth/auth.helper.service";
@@ -17,6 +17,7 @@ import { UsersEntity } from "../users/entity/users.entity";
 import { UsersService } from "../users/users.service";
 import { UserSessionService } from "../userSessions/userSession.service";
 
+import { AuthEvents, type UserLoggedInEventPayload } from "./constants/auth-events";
 import { ERROR_MESSAGES } from "./constants/messages";
 import { SignupUserDto } from "./dto/login.user.dto";
 
@@ -30,6 +31,7 @@ export class AuthService {
     @Inject(forwardRef(() => UsersService))
     private readonly userService: UsersService,
     private readonly userSessionService: UserSessionService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private hashToken(token: string): string {
@@ -112,9 +114,19 @@ export class AuthService {
     setRefreshTokenCookie(res, refreshToken);
   }
 
-  async signup(user: SignupUserDto, res: Response, req?: Request): Promise<void> {
+  private emitUserLoggedIn(payload: UserLoggedInEventPayload): void {
+    this.eventEmitter.emit(AuthEvents.USER_LOGGED_IN, payload);
+  }
+
+  async signup(user: SignupUserDto, res: Response, req?: Request, guestToken?: string): Promise<void> {
     const newUser = await this.userService.create(user);
     await this.setLoginCookies(res, newUser.id, req);
+
+    this.emitUserLoggedIn({
+      userId: newUser.id,
+      guestToken,
+      isNewUser: true,
+    });
   }
 
   private async checkLoginAttempts(email: string): Promise<void> {
@@ -143,7 +155,7 @@ export class AuthService {
     }
   }
 
-  async login(email: string, password: string, res: Response, req?: Request): Promise<boolean> {
+  async login(email: string, password: string, res: Response, req?: Request, guestToken?: string): Promise<boolean> {
     await this.checkLoginAttempts(email);
 
     const user = await this.userRepository
@@ -162,6 +174,13 @@ export class AuthService {
     await this.redisService.delete([`login_attempts:${email}`, `login_blocked:${email}`]);
 
     await this.setLoginCookies(res, user.id, req);
+
+    this.emitUserLoggedIn({
+      userId: user.id,
+      guestToken,
+      isNewUser: false,
+    });
+
     return true;
   }
 

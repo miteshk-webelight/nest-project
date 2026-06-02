@@ -23,11 +23,11 @@ import { GuestSessionResponse } from "./response/guest-session.response";
 import type { Request, Response } from "express";
 
 @ApiTags(ApiTag.Carts)
+@Public()
 @Controller("carts")
 export class CartsController {
   constructor(private readonly cartsService: CartsService) {}
 
-  @Public()
   @ApiSwaggerResponse(MessageResponse)
   @UseGuards(OptionalAuthGuard)
   @Post("items")
@@ -61,7 +61,6 @@ export class CartsController {
     }
   }
 
-  @Public()
   @ApiSwaggerResponse(MessageResponse)
   @UseGuards(OptionalAuthGuard)
   @Patch("items/:productId")
@@ -98,7 +97,6 @@ export class CartsController {
     }
   }
 
-  @Public()
   @ApiSwaggerResponse(MessageResponse)
   @UseGuards(OptionalAuthGuard)
   @Delete("items/:productId")
@@ -133,7 +131,6 @@ export class CartsController {
     }
   }
 
-  @Public()
   @ApiSwaggerResponse(CartResponse)
   @UseGuards(OptionalAuthGuard)
   @Get("me")
@@ -164,7 +161,6 @@ export class CartsController {
     }
   }
 
-  @Public()
   @ApiSwaggerResponse(GuestSessionResponse)
   @RateLimit(20, 60)
   @Post("guest-session")

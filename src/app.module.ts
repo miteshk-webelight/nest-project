@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
+import { EventEmitterModule } from "@nestjs/event-emitter";
 import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerModule } from "@nestjs/throttler";
 
@@ -25,6 +26,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
 @Module({
   imports: [
     DatabaseModule,
+    EventEmitterModule.forRoot(),
     AuthModule,
     FileManagementModule,
     ThrottlerModule.forRoot(throttlerConfig),
