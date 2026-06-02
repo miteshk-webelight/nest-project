@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, OmitType } from "@nestjs/swagger";
 
 import { Type } from "class-transformer";
 import { IsInt, IsNotEmpty, Min } from "class-validator";
@@ -15,5 +15,10 @@ export class AddCartItemDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  quantity: number;
+}
+
+export class UpdateCartItemDto extends OmitType(AddCartItemDto, ["productId"] as const) {
+  @Min(0)
   quantity: number;
 }

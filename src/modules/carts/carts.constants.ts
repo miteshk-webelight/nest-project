@@ -15,10 +15,14 @@ export const ERROR_MESSAGES = {
   CATEGORY_INACTIVE: "Product category is not active.",
   QUANTITY_MINIMUM: "Quantity must be at least 1.",
   INSUFFICIENT_STOCK: "Requested quantity exceeds available stock.",
+  CART_NOT_FOUND: "Cart not found.",
+  CART_ITEM_NOT_FOUND: "Cart item not found.",
 };
 
 export const SUCCESS_MESSAGES = {
   ITEM_ADDED_TO_CART: "Item added to cart successfully.",
+  ITEM_UPDATED_IN_CART: "Cart item updated successfully.",
+  ITEM_REMOVED_FROM_CART: "Cart item removed successfully.",
 };
 
 export const CART_SELECT_FIELDS = {
