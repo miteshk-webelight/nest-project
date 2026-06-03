@@ -12,12 +12,14 @@ import { RateLimit } from "../rateLimiter/decorators/rate-limit.decorator";
 import { MessageResponse } from "../swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "../swagger/swagger.decorator";
 
+import { CreateAddressDto } from "./dto/create-address.dto";
 import { FindAllUsersDto } from "./dto/find-all-users.dto";
 import { UpdateUserDto } from "./dto/update-user-dto";
 import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
+import { UserAddressesResponse } from "./responses/address.response";
 import { UserDetailsResponse } from "./responses/users-details.response";
 import { UsersListResponse } from "./responses/users.response";
-import { SUCCESS_MESSAGES, UserRoleEnum } from "./user.constants";
+import { ADDRESS_SUCCESS_MESSAGES, SUCCESS_MESSAGES, UserRoleEnum } from "./user.constants";
 import { UsersService } from "./users.service";
 
 import type { Request, Response } from "express";
@@ -197,6 +199,50 @@ export class UsersController {
       });
     } catch (error) {
       logger.error("Error fetching users list:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.CREATED })
+  @UseGuards(RoleGuard(UserRoleEnum.USER, UserRoleEnum.VENDOR, UserRoleEnum.ADMIN))
+  @RateLimit(15, 60)
+  @Post("me/addresses")
+  async addUserAddress(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() dto: CreateAddressDto,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.usersService.addUserAddress(req.user.id, dto);
+
+      return responseUtils.success(res, {
+        data: { message: ADDRESS_SUCCESS_MESSAGES.ADDRESS_ADDED_SUCCESS },
+        status: StatusCodes.CREATED,
+      });
+    } catch (error) {
+      logger.error("Error encountered while registering user address location:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(UserAddressesResponse, { status: StatusCodes.OK })
+  @UseGuards(RoleGuard(UserRoleEnum.USER, UserRoleEnum.VENDOR, UserRoleEnum.ADMIN))
+  @RateLimit(60, 60)
+  @Get("me/addresses")
+  async getUserAddresses(
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<UserAddressesResponse>>> {
+    try {
+      const addresses = await this.usersService.getUserAddresses(req.user.id);
+
+      return responseUtils.success(res, {
+        data: { addresses },
+        status: StatusCodes.OK,
+        transformWith: UserAddressesResponse,
+      });
+    } catch (error) {
+      logger.error("Error encountered while fetching user address location:", error);
       return responseUtils.error({ res, error });
     }
   }
