@@ -1,28 +1,37 @@
 import crypto from "crypto";
 
+import { HttpService } from "@nestjs/axios";
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 
+import { firstValueFrom } from "rxjs";
 import { Repository, SelectQueryBuilder } from "typeorm";
 
 import { SortOrderEnum } from "src/constants/common.constants";
 
 import { applyPagination } from "../../utils/helper.utils";
 import { createPaginationMeta } from "../../utils/pagination.utils";
+import { DatabaseService } from "../database/database.service";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 
+import { CreateAddressDto } from "./dto/create-address.dto";
 import { FindAllUsersDto } from "./dto/find-all-users.dto";
 import { UpdateUserDto } from "./dto/update-user-dto";
 import { CreateAdminDto, CreateUserDto } from "./dto/users.dto";
+import { AddressEntity } from "./entity/address.entity";
 import { UsersEntity } from "./entity/users.entity";
 import { UsersListResponse } from "./responses/users.response";
 import {
+  ADDRESS_ERROR_MESSAGES,
+  ADDRESS_SELECT_FIELDS,
   ERROR_MESSAGES,
+  POSTAL_VERIFICATION_URL,
   USER_DETAILS_SELECT_FIELDS,
   USER_LIST_SELECT_FIELDS,
   UserRoleEnum,
   UserSortByEnum,
 } from "./user.constants";
+import { validateAddress } from "./utils/postal-validation.util";
 import { validateUserUniqueFields, validateUserUpdatePayload } from "./utils/user-valiation.utils";
 
 @Injectable()
@@ -30,6 +39,9 @@ export class UsersService {
   constructor(
     @InjectRepository(UsersEntity)
     private readonly userRepository: Repository<UsersEntity>,
+
+    private readonly databaseService: DatabaseService,
+    private readonly httpService: HttpService,
   ) {}
 
   private hashPassword(password: string): string {
@@ -219,5 +231,37 @@ export class UsersService {
     }
 
     await this.userRepository.restore(id);
+  }
+
+  async addUserAddress(userId: string, dto: CreateAddressDto): Promise<AddressEntity> {
+    try {
+      const response = await firstValueFrom(this.httpService.get(POSTAL_VERIFICATION_URL(dto.postalCode)));
+
+      validateAddress(response.data, dto.city, dto.state, dto.postalCode);
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+
+      throw new BadRequestException(ADDRESS_ERROR_MESSAGES.POSTAL_SERVICE_ERROR);
+    }
+
+    const addressRepo = this.databaseService.getRepository(AddressEntity);
+
+    const newAddress = addressRepo.create({
+      ...dto,
+      userId,
+    });
+
+    return addressRepo.save(newAddress);
+  }
+
+  async getUserAddresses(userId: string): Promise<AddressEntity[]> {
+    const addressRepo = this.databaseService.getRepository(AddressEntity);
+
+    return await addressRepo
+      .createQueryBuilder("addresses")
+      .select(ADDRESS_SELECT_FIELDS)
+      .where("addresses.userId = :userId", { userId })
+      .orderBy("addresses.createdAt", SortOrderEnum.DESC)
+      .getMany();
   }
 }
