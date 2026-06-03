@@ -17,6 +17,7 @@ import { CartsService } from "./modules/carts/carts.service";
 import { CategoriesModule } from "./modules/categories/categories.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { FileManagementModule } from "./modules/fileManagment/fileManagment.module";
+import { PaymentsModule } from "./modules/payments/payments.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RateLimitGuard } from "./modules/rateLimiter/guards/rate-limit.guard";
 import { RateLimiterModule } from "./modules/rateLimiter/rate-limiter.module";
@@ -38,6 +39,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     ProductsModule,
     ScheduleModule.forRoot(),
     CartsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [
