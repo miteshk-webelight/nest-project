@@ -16,4 +16,5 @@ export enum ApiTag {
   Products = "Products",
   Media = "Media",
   Carts = "Carts",
+  Webhook = "Webhook",
 }
