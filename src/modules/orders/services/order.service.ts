@@ -1,14 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 
-import { SelectQueryBuilder } from "typeorm";
+import { QueryRunner, SelectQueryBuilder } from "typeorm";
 
 import { SortOrderEnum } from "src/constants/common.constants";
 import { DatabaseService } from "src/modules/database/database.service";
+import { RazorpayService } from "src/modules/payments/razorpay.service";
 import { RedisService } from "src/modules/redis/redis.service";
 import { applyPagination } from "src/utils/helper.utils";
 import { createPaginationMeta } from "src/utils/pagination.utils";
 
 import { ListOrdersDto } from "../dto/list-orders.dto";
+import { UpdateVendorOrderStatusDto } from "../dto/udpate-vendor-order-status.dto";
 import { OrderEntity } from "../entities/order.entity";
 import { VendorOrderEntity } from "../entities/vendor-order.entity";
 import {
@@ -16,9 +18,17 @@ import {
   getOrderListCacheKey,
   buildOrderDetailsResponse,
   buildOrderListResponse,
+  validateVendorOrderStatusTransition,
+  invalidateCache,
 } from "../order.utils";
-import { ERROR_MESSAGES, ORDER_CACHE_TTL, ORDER_SELECT_FIELDS } from "../orders.constants";
-import { OrderSortByEnum } from "../orders.enums";
+import { ERROR_MESSAGES, ORDER_CACHE_TTL, ORDER_ERROR_CONTEXT, ORDER_SELECT_FIELDS } from "../orders.constants";
+import {
+  OrderSortByEnum,
+  OrderStatusEnum,
+  PaymentMethodEnum,
+  PaymentStatusEnum,
+  VendorOrderStatusEnum,
+} from "../orders.enums";
 import { OrderWithAddress, VendorOrderWithVendor } from "../orders.interface";
 import { OrderDetailsResponse } from "../responses/order-details.response";
 import { OrdersListResponse } from "../responses/order-list.response";
@@ -28,6 +38,7 @@ export class OrderService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly redisService: RedisService,
+    private readonly razorpayService: RazorpayService,
   ) {}
 
   async getMyOrders(userId: string, query: ListOrdersDto): Promise<OrdersListResponse> {
@@ -188,5 +199,58 @@ export class OrderService {
         meta: createPaginationMeta(page, limit, total),
       }),
     };
+  }
+
+  async updateVendorOrderStatus(
+    vendorId: string | null,
+    vendorOrderId: string,
+    dto: UpdateVendorOrderStatusDto,
+  ): Promise<void> {
+    const [orderId, userId] = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        if (!vendorId) {
+          throw new ForbiddenException();
+        }
+        const vendorOrderRepo = queryRunner.manager.getRepository(VendorOrderEntity);
+
+        const vendorOrder = await vendorOrderRepo
+          .createQueryBuilder("vendorOrder")
+          .leftJoinAndSelect("vendorOrder.order", "order")
+          .select([...ORDER_SELECT_FIELDS.VENDOR_ORDER, ...ORDER_SELECT_FIELDS.ORDER_FOR_PAYMENT])
+          .where(`vendorOrder.id = :vendorOrderId AND vendorOrder.vendorId = :vendorId`, { vendorOrderId, vendorId })
+          .getOne();
+
+        if (!vendorOrder) {
+          throw new NotFoundException(ERROR_MESSAGES.ORDER_NOT_FOUND);
+        }
+
+        const isOnlinePayment = vendorOrder.order.paymentMethod === PaymentMethodEnum.RAZORPAY;
+
+        if (isOnlinePayment && vendorOrder.order.paymentStatus !== PaymentStatusEnum.PAID) {
+          throw new BadRequestException(ERROR_MESSAGES.ORDER_PAYMENT_PENDING);
+        }
+
+        validateVendorOrderStatusTransition(vendorOrder.status, dto.status);
+
+        if (isOnlinePayment && dto.status === VendorOrderStatusEnum.CANCELLED) {
+          await this.razorpayService.refundPayment(vendorOrder.order.razorpayPaymentId!);
+          const { id } = vendorOrder.order;
+
+          await queryRunner.manager.update(
+            OrderEntity,
+            { id },
+            {
+              paymentStatus: PaymentStatusEnum.REFUNDED,
+              status: OrderStatusEnum.CANCELLED,
+            },
+          );
+        }
+        vendorOrder.status = dto.status;
+        await vendorOrderRepo.save(vendorOrder);
+        return [vendorOrder.order.id, vendorOrder.order.userId];
+      },
+      errorContext: ORDER_ERROR_CONTEXT.UPDATE_ORDER_STATUS,
+    });
+    await invalidateCache(this.redisService, orderId, userId);
   }
 }

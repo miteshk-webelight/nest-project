@@ -1,6 +1,11 @@
+import { BadRequestException } from "@nestjs/common";
+
 import { ulid } from "ulid";
 
+import { ERROR_MESSAGES, VALID_VENDOR_ORDER_STATUS_TRANSITION } from "./orders.constants";
+
 import type { OrderItemEntity } from "./entities/order-item.entity";
+import type { VendorOrderStatusEnum } from "./orders.enums";
 import type {
   CheckoutPricingSummary,
   GroupedCartItems,
@@ -8,6 +13,7 @@ import type {
   VendorOrderWithVendor,
 } from "./orders.interface";
 import type { OrderDetailsResponse } from "./responses/order-details.response";
+import type { RedisService } from "../redis/redis.service";
 import type { OrderListItemResponse } from "./responses/order-list.response";
 import type { CartItemEntity } from "../carts/entities/cart-items.entity";
 import type { ProductEntity } from "../products/product.entity";
@@ -183,4 +189,40 @@ export const getOrderListCacheKey = (userId: string, params: string): string => 
 
 export const getOrderDetailsCacheKey = (orderId: string): string => {
   return `order:details:${orderId}`;
+};
+
+export const invalidateCache = async (
+  redisService: RedisService,
+  orderId?: string | null,
+  userId?: string | null,
+): Promise<void> => {
+  const keysToDelete: string[] = [];
+
+  if (orderId) {
+    keysToDelete.push(getOrderDetailsCacheKey(orderId));
+  }
+
+  if (userId) {
+    const listKeys = await redisService.keys(`order:list:${userId}:*`);
+    keysToDelete.push(...listKeys);
+  }
+
+  if (keysToDelete.length > 0) {
+    await redisService.delete(keysToDelete);
+  }
+};
+
+export const validateVendorOrderStatusTransition = (
+  currentStatus: VendorOrderStatusEnum,
+  nextStatus: VendorOrderStatusEnum,
+): void => {
+  if (currentStatus === nextStatus) {
+    throw new BadRequestException(ERROR_MESSAGES.ORDER_STATUS_ALREADY_SET);
+  }
+
+  const allowedTransitions = VALID_VENDOR_ORDER_STATUS_TRANSITION[currentStatus];
+
+  if (!allowedTransitions.includes(nextStatus)) {
+    throw new BadRequestException(ERROR_MESSAGES.INVALID_VENDOR_ORDER_STATUS_TRANSITION(currentStatus, nextStatus));
+  }
 };

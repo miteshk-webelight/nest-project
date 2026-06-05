@@ -1,3 +1,5 @@
+import { VendorOrderStatusEnum } from "./orders.enums";
+
 export const ORDER_CACHE_TTL = 300;
 export const RAZORPAY_HEADER_SIGNATURE_KEY = "x-razorpay-signature";
 
@@ -20,7 +22,28 @@ export const ERROR_MESSAGES = {
   WEBHOOK_SECRET_MISSING: "Webhook secret not configured",
   VENDOR_ORDER_MAPPING_FAILED: "Vendor order mapping failed",
   ORDER_CONTAINS_NO_ITEMS: "Order contains no items",
+  ORDER_STATUS_ALREADY_SET: "Order status is already set.",
+  ORDER_PAYMENT_PENDING: "Order can't be updated because payment is pending",
   INVALID_SORT_FIELD: "Invalid sort field for order listing",
+  INVALID_VENDOR_ORDER_STATUS_TRANSITION: (currentStatus: string, nextStatus: string) =>
+    `Invalid vendor status transition from ${currentStatus} to ${nextStatus}`,
+};
+
+export const VALID_VENDOR_ORDER_STATUS_TRANSITION: Record<VendorOrderStatusEnum, VendorOrderStatusEnum[]> = {
+  // Pending -> processing or Rejected
+  [VendorOrderStatusEnum.PENDING]: [VendorOrderStatusEnum.CANCELLED, VendorOrderStatusEnum.PROCESSING],
+
+  // processing -> cancelled, shipped
+  [VendorOrderStatusEnum.PROCESSING]: [VendorOrderStatusEnum.CANCELLED, VendorOrderStatusEnum.SHIPPED],
+
+  // shipped -> delivered
+  [VendorOrderStatusEnum.SHIPPED]: [VendorOrderStatusEnum.DELIVERED],
+
+  // delivered ->  Can't update status
+  [VendorOrderStatusEnum.DELIVERED]: [],
+
+  // cancelled ->  Can't update status
+  [VendorOrderStatusEnum.CANCELLED]: [],
 };
 
 export const SUCCESS_MESSAGES = {
@@ -29,6 +52,7 @@ export const SUCCESS_MESSAGES = {
   ORDER_CONFIRMED: "Order confirmed successfully",
   ORDER_CANCELLED: "Order cancelled successfully",
   WEBHOOK_PROCESSED: "Webhook processed successfully",
+  ORDER_STATUS_UPDATED: "Order Status Updated Successfully.",
 };
 
 export const ORDER_SELECT_FIELDS = {
@@ -181,6 +205,7 @@ export const ORDER_ERROR_CONTEXT = {
   PROCESS_WEBHOOK: "Process Webhook",
   STOCK_DECREMENT: "Stock Decrement",
   REFUND_PAYMENT: "Refund Payment",
+  UPDATE_ORDER_STATUS: "Update Order Status",
 };
 
 export const PAYMENT_STATUS_RAZORPAY = {

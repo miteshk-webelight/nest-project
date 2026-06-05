@@ -1,18 +1,24 @@
-import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
 
 import { ApiTag } from "src/constants/api-tags.constants";
+import { VendorStatus } from "src/decorators/vendor-status.decorator";
 import { RoleGuard } from "src/guards/role-guard";
+import { VendorStatusGuard } from "src/guards/vendor-status.guard";
 import { RateLimit } from "src/modules/rateLimiter/decorators/rate-limit.decorator";
+import { MessageResponse } from "src/modules/swagger/dtos/response.dtos";
 import { ApiSwaggerResponse } from "src/modules/swagger/swagger.decorator";
 import { UserRoleEnum } from "src/modules/users/user.constants";
+import { VendorStatusEnum } from "src/modules/vendors/vendors.constants";
 import { logger } from "src/services/logger.service";
 import responseUtils, { CommonResponseType } from "src/utils/response.utils";
 
 import { CheckoutDto } from "../dto/checkout.dto";
 import { ListOrdersDto } from "../dto/list-orders.dto";
+import { UpdateVendorOrderStatusDto } from "../dto/udpate-vendor-order-status.dto";
+import { SUCCESS_MESSAGES } from "../orders.constants";
 import { CheckoutResponse } from "../responses/checkout.response";
 import { OrderDetailsResponse } from "../responses/order-details.response";
 import { OrdersListResponse } from "../responses/order-list.response";
@@ -48,6 +54,32 @@ export class OrdersController {
         data: checkoutResponse,
         status: StatusCodes.CREATED,
         transformWith: CheckoutResponse,
+      });
+    } catch (error) {
+      logger.error("Error during checkout:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.OK })
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
+  @VendorStatus(VendorStatusEnum.APPROVED)
+  @RateLimit(10, 60)
+  @Patch("vendor/:vendorOrderId")
+  async updateVendorOrderStatus(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Body() dto: UpdateVendorOrderStatusDto,
+    @Param("vendorOrderId") vendorOrderId: string,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.orderService.updateVendorOrderStatus(req.vendorProfile!.id, vendorOrderId, dto);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.ORDER_STATUS_UPDATED,
+        },
+        status: StatusCodes.OK,
       });
     } catch (error) {
       logger.error("Error during checkout:", error);
