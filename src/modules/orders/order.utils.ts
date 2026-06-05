@@ -1,8 +1,17 @@
 import { ulid } from "ulid";
 
-import type { CheckoutPricingSummary, GroupedCartItems } from "./orders.interface";
+import type { OrderItemEntity } from "./entities/order-item.entity";
+import type {
+  CheckoutPricingSummary,
+  GroupedCartItems,
+  OrderWithAddress,
+  VendorOrderWithVendor,
+} from "./orders.interface";
+import type { OrderDetailsResponse } from "./responses/order-details.response";
+import type { OrderListItemResponse } from "./responses/order-list.response";
 import type { CartItemEntity } from "../carts/entities/cart-items.entity";
 import type { ProductEntity } from "../products/product.entity";
+import type { AddressEntity } from "../users/entity/address.entity";
 
 /**
  * Groups cart items by vendor based on the associated product.
@@ -103,3 +112,75 @@ export function convertToPaise(amount: number): number {
 export function convertFromPaise(amount: number): number {
   return amount / 100;
 }
+
+export function formatAddress(address: AddressEntity): string {
+  const parts = [
+    address.addressLine1,
+    address.addressLine2,
+    address.city,
+    address.state,
+    address.postalCode,
+    address.country,
+  ].filter(Boolean);
+
+  return parts.join(", ");
+}
+
+function mapCoreOrderFields(order: OrderWithAddress): Omit<OrderListItemResponse, "createdAt"> {
+  return {
+    id: order.id,
+    orderNumber: order.orderNumber,
+    totalAmount: order.totalAmount,
+    status: order.status,
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
+    placedAt: order.placedAt ?? new Date(),
+    address: {
+      fullName: order.address.fullName,
+      phoneNumber: order.address.phoneNumber,
+      address: formatAddress(order.address),
+    },
+  };
+}
+
+export const buildOrderListResponse = (orders: OrderWithAddress[]): OrderListItemResponse[] => {
+  return orders.map((order) => {
+    return {
+      ...mapCoreOrderFields(order),
+      createdAt: order.createdAt,
+    };
+  });
+};
+
+export const buildOrderDetailsResponse = (
+  order: OrderWithAddress,
+  vendorOrders: VendorOrderWithVendor[],
+): OrderDetailsResponse => {
+  return {
+    ...mapCoreOrderFields(order),
+    vendorOrders: vendorOrders.map((vendorOrder) => ({
+      id: vendorOrder.id,
+      vendorId: vendorOrder.vendorId,
+      vendorBusinessName: vendorOrder.businessName,
+      status: vendorOrder.status,
+      totalAmount: vendorOrder.totalAmount,
+      items: vendorOrder.orderItems.map((item: OrderItemEntity) => ({
+        productId: item.productId,
+        nameSnapshot: item.nameSnapshot,
+        slugSnapshot: item.slugSnapshot,
+        skuSnapshot: item.skuSnapshot,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+      })),
+    })),
+  };
+};
+
+export const getOrderListCacheKey = (userId: string, params: string): string => {
+  return `order:list:${userId}:${params}`;
+};
+
+export const getOrderDetailsCacheKey = (orderId: string): string => {
+  return `order:details:${orderId}`;
+};
