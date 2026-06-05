@@ -18,6 +18,7 @@ import { OrderItemEntity } from "./entities/order-item.entity";
 import { OrderEntity } from "./entities/order.entity";
 import { VendorOrderEntity } from "./entities/vendor-order.entity";
 import { CheckoutService } from "./services/checkout.service";
+import { OrderService } from "./services/order.service";
 import { PaymentService } from "./services/payment.service";
 import { WebhookService } from "./services/webhook.service";
 
@@ -40,7 +41,7 @@ import { WebhookService } from "./services/webhook.service";
     ]),
   ],
   controllers: [OrdersController, WebhooksController],
-  providers: [CheckoutService, PaymentService, WebhookService],
-  exports: [CheckoutService, PaymentService, WebhookService],
+  providers: [CheckoutService, PaymentService, WebhookService, OrderService],
+  exports: [CheckoutService, PaymentService, WebhookService, OrderService],
 })
 export class OrdersModule {}

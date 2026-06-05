@@ -21,3 +21,8 @@ export enum VendorOrderStatusEnum {
   DELIVERED = "DELIVERED",
   CANCELLED = "CANCELLED",
 }
+export enum OrderSortByEnum {
+  CREATED_AT = "createdAt",
+  PLACED_AT = "placedAt",
+  TOTAL_AMOUNT = "totalAmount",
+}

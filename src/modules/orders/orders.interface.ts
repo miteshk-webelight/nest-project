@@ -1,6 +1,8 @@
+import type { OrderItemEntity } from "./entities/order-item.entity";
+import type { OrderEntity } from "./entities/order.entity";
+import type { VendorOrderEntity } from "./entities/vendor-order.entity";
 import type { CartItemEntity } from "../carts/entities/cart-items.entity";
 import type { ProductEntity } from "../products/product.entity";
-import type { VendorOrderEntity } from "./entities/vendor-order.entity";
 import type { QueryRunner } from "typeorm";
 
 export interface RazorpayWebhookPayload {
@@ -93,6 +95,22 @@ export interface CheckoutPricingSummary {
 }
 export interface CreateOrderRecordParams extends TransactionContext, UserContext, AddressContext {
   totalAmount: number;
+}
+
+export interface OrderWithAddress extends OrderEntity {
+  fullName: string;
+  phoneNumber: string;
+  addressLine1: string;
+  addressLine2?: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+export interface VendorOrderWithVendor extends VendorOrderEntity {
+  businessName: string;
+  orderItems: OrderItemEntity[];
 }
 
 export interface LoadValidatedAddressParams extends TransactionContext, UserContext, AddressContext {}

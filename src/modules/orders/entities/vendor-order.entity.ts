@@ -1,5 +1,7 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, Relation } from "typeorm";
 
+import { VendorProfileEntity } from "src/modules/vendors/vendor.profile.entity";
+
 import { BaseEntity } from "../../database/base-entity";
 import { VendorOrderStatusEnum } from "../orders.enums";
 
@@ -26,6 +28,10 @@ export class VendorOrderEntity extends BaseEntity {
   @Column()
   @Index()
   vendorId: string;
+
+  @ManyToOne(() => VendorProfileEntity, (vendor) => vendor.id)
+  @JoinColumn({ name: "vendorId" })
+  vendor: VendorProfileEntity;
 
   @Column({ type: "decimal", precision: 10, scale: 2 })
   totalAmount: number;
