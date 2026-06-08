@@ -1,9 +1,17 @@
+import type { AddressEntity } from "../users/entity/address.entity";
+import type { UserRoleEnum } from "../users/user.constants";
 import type { OrderItemEntity } from "./entities/order-item.entity";
 import type { OrderEntity } from "./entities/order.entity";
 import type { VendorOrderEntity } from "./entities/vendor-order.entity";
 import type { CartItemEntity } from "../carts/entities/cart-items.entity";
 import type { ProductEntity } from "../products/product.entity";
 import type { QueryRunner } from "typeorm";
+
+export interface OrderAccessContext {
+  role: UserRoleEnum;
+  userId: string;
+  vendorId?: string;
+}
 
 export interface RazorpayWebhookPayload {
   event: string;
@@ -97,17 +105,17 @@ export interface CreateOrderRecordParams extends TransactionContext, UserContext
   totalAmount: number;
 }
 
-export interface OrderWithAddress extends OrderEntity {
-  fullName: string;
-  phoneNumber: string;
-  addressLine1: string;
-  addressLine2?: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
+export interface OrderWithAddress extends Omit<OrderEntity, "address"> {
+  address: AddressEntity;
 }
 
+export interface OrderUserSummary {
+  id: string;
+  firstName: string;
+  lastName?: string;
+  email: string;
+  phoneNumber: string;
+}
 export interface VendorOrderWithVendor extends VendorOrderEntity {
   businessName: string;
   orderItems: OrderItemEntity[];

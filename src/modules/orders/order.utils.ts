@@ -1,13 +1,23 @@
+import { BadRequestException } from "@nestjs/common";
+
 import { ulid } from "ulid";
 
+import { UserRoleEnum } from "../users/user.constants";
+
+import { ERROR_MESSAGES, VALID_VENDOR_ORDER_STATUS_TRANSITION } from "./orders.constants";
+
 import type { OrderItemEntity } from "./entities/order-item.entity";
+import type { VendorOrderEntity } from "./entities/vendor-order.entity";
+import type { VendorOrderStatusEnum } from "./orders.enums";
 import type {
   CheckoutPricingSummary,
   GroupedCartItems,
+  OrderUserSummary,
   OrderWithAddress,
-  VendorOrderWithVendor,
+  OrderAccessContext,
 } from "./orders.interface";
-import type { OrderDetailsResponse } from "./responses/order-details.response";
+import type { AdminOrderDetailsResponse, OrderDetailsResponse } from "./responses/order-details.response";
+import type { RedisService } from "../redis/redis.service";
 import type { OrderListItemResponse } from "./responses/order-list.response";
 import type { CartItemEntity } from "../carts/entities/cart-items.entity";
 import type { ProductEntity } from "../products/product.entity";
@@ -154,14 +164,14 @@ export const buildOrderListResponse = (orders: OrderWithAddress[]): OrderListIte
 
 export const buildOrderDetailsResponse = (
   order: OrderWithAddress,
-  vendorOrders: VendorOrderWithVendor[],
+  vendorOrders: VendorOrderEntity[],
 ): OrderDetailsResponse => {
   return {
     ...mapCoreOrderFields(order),
     vendorOrders: vendorOrders.map((vendorOrder) => ({
       id: vendorOrder.id,
       vendorId: vendorOrder.vendorId,
-      vendorBusinessName: vendorOrder.businessName,
+      vendorBusinessName: vendorOrder.vendor.businessName,
       status: vendorOrder.status,
       totalAmount: vendorOrder.totalAmount,
       items: vendorOrder.orderItems.map((item: OrderItemEntity) => ({
@@ -177,10 +187,83 @@ export const buildOrderDetailsResponse = (
   };
 };
 
-export const getOrderListCacheKey = (userId: string, params: string): string => {
-  return `order:list:${userId}:${params}`;
+export const buildAdminOrderDetailsResponse = (
+  order: OrderWithAddress,
+  user: OrderUserSummary,
+  vendorOrders: VendorOrderEntity[],
+): AdminOrderDetailsResponse => {
+  return {
+    ...buildOrderDetailsResponse(order, vendorOrders),
+    user,
+    razorpay: {
+      razorpayOrderId: order.razorpayOrderId ?? null,
+      razorpayPaymentId: order.razorpayPaymentId ?? null,
+    },
+  };
 };
 
-export const getOrderDetailsCacheKey = (orderId: string): string => {
-  return `order:details:${orderId}`;
+export const getOrderAccessScopeKey = (access: OrderAccessContext): string => {
+  if (access.role === UserRoleEnum.ADMIN) {
+    return "admin:all";
+  }
+
+  if (access.role === UserRoleEnum.VENDOR) {
+    return `vendor:${access.vendorId}`;
+  }
+
+  return `user:${access.userId}`;
+};
+
+export const getOrderListCacheKey = (scopeKey: string, params: string): string => {
+  return `order:list:${scopeKey}:${params}`;
+};
+
+export const getOrderDetailsCacheKey = (orderId: string, scopeKey: string): string => {
+  return `order:details:${orderId}:${scopeKey}`;
+};
+
+export const invalidateCache = async (
+  redisService: RedisService,
+  orderId?: string | null,
+  userId?: string | null,
+  vendorId?: string | null,
+): Promise<void> => {
+  const keysToDelete: string[] = [];
+
+  if (orderId) {
+    const detailKeys = await redisService.keys(`order:details:${orderId}:*`);
+    keysToDelete.push(...detailKeys);
+  }
+
+  if (userId) {
+    const listKeys = await redisService.keys(`order:list:user:${userId}:*`);
+    keysToDelete.push(...listKeys);
+  }
+
+  if (vendorId) {
+    const listKeys = await redisService.keys(`order:list:vendor:${vendorId}:*`);
+    keysToDelete.push(...listKeys);
+  }
+
+  const adminListKeys = await redisService.keys("order:list:admin:all:*");
+  keysToDelete.push(...adminListKeys);
+
+  if (keysToDelete.length > 0) {
+    await redisService.delete(keysToDelete);
+  }
+};
+
+export const validateVendorOrderStatusTransition = (
+  currentStatus: VendorOrderStatusEnum,
+  nextStatus: VendorOrderStatusEnum,
+): void => {
+  if (currentStatus === nextStatus) {
+    throw new BadRequestException(ERROR_MESSAGES.ORDER_STATUS_ALREADY_SET);
+  }
+
+  const allowedTransitions = VALID_VENDOR_ORDER_STATUS_TRANSITION[currentStatus];
+
+  if (!allowedTransitions.includes(nextStatus)) {
+    throw new BadRequestException(ERROR_MESSAGES.INVALID_VENDOR_ORDER_STATUS_TRANSITION(currentStatus, nextStatus));
+  }
 };
