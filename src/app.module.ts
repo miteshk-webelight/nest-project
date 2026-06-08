@@ -11,6 +11,7 @@ import { AppService } from "./app.service";
 import { clsConfig } from "./config/cls.config";
 import { throttlerConfig } from "./config/throttle.config";
 import { AuthGuard } from "./guards/auth-guard";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CartsModule } from "./modules/carts/carts.module";
 import { CartsService } from "./modules/carts/carts.service";
@@ -42,6 +43,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     CartsModule,
     PaymentsModule,
     OrdersModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
