@@ -6,6 +6,7 @@ import { SortOrderEnum } from "src/constants/common.constants";
 import { DatabaseService } from "src/modules/database/database.service";
 import { RazorpayService } from "src/modules/payments/razorpay.service";
 import { RedisService } from "src/modules/redis/redis.service";
+import { UserRoleEnum } from "src/modules/users/user.constants";
 import { applyPagination } from "src/utils/helper.utils";
 import { createPaginationMeta } from "src/utils/pagination.utils";
 
@@ -14,8 +15,10 @@ import { UpdateVendorOrderStatusDto } from "../dto/udpate-vendor-order-status.dt
 import { OrderEntity } from "../entities/order.entity";
 import { VendorOrderEntity } from "../entities/vendor-order.entity";
 import {
+  getOrderAccessScopeKey,
   getOrderDetailsCacheKey,
   getOrderListCacheKey,
+  buildAdminOrderDetailsResponse,
   buildOrderDetailsResponse,
   buildOrderListResponse,
   validateVendorOrderStatusTransition,
@@ -29,8 +32,8 @@ import {
   PaymentStatusEnum,
   VendorOrderStatusEnum,
 } from "../orders.enums";
-import { OrderWithAddress, VendorOrderWithVendor } from "../orders.interface";
-import { OrderDetailsResponse } from "../responses/order-details.response";
+import { OrderAccessContext } from "../orders.interface";
+import { AdminOrderDetailsResponse, OrderDetailsResponse } from "../responses/order-details.response";
 import { OrdersListResponse } from "../responses/order-list.response";
 
 @Injectable()
@@ -41,7 +44,9 @@ export class OrderService {
     private readonly razorpayService: RazorpayService,
   ) {}
 
-  async getMyOrders(userId: string, query: ListOrdersDto): Promise<OrdersListResponse> {
+  async getMyOrders(access: OrderAccessContext, query: ListOrdersDto): Promise<OrdersListResponse> {
+    this.validateOrderAccess(access);
+
     const {
       page = 1,
       limit = 10,
@@ -70,7 +75,8 @@ export class OrderService {
       isPagination,
     ].join("-");
 
-    const cacheKey = getOrderListCacheKey(userId, cacheParams);
+    const scopeKey = getOrderAccessScopeKey(access);
+    const cacheKey = getOrderListCacheKey(scopeKey, cacheParams);
 
     return this.redisService.getOrSet({
       key: cacheKey,
@@ -84,7 +90,7 @@ export class OrderService {
 
         this.applyOrderFilters({
           qb,
-          userId,
+          access,
           search,
           status,
           paymentStatus,
@@ -103,55 +109,119 @@ export class OrderService {
     });
   }
 
-  async getOrderDetails(orderId: string, userId: string): Promise<OrderDetailsResponse> {
+  async getOrderDetails(
+    orderId: string,
+    access: OrderAccessContext,
+  ): Promise<OrderDetailsResponse | AdminOrderDetailsResponse> {
+    this.validateOrderAccess(access);
+
+    const scopeKey = getOrderAccessScopeKey(access);
+
     return this.redisService.getOrSet({
-      key: getOrderDetailsCacheKey(orderId),
+      key: getOrderDetailsCacheKey(orderId, scopeKey),
       ttl: ORDER_CACHE_TTL,
-      fetcher: async () => this.findOrderDetails(orderId, userId),
+      fetcher: async () => this.findOrderDetails(orderId, access),
     });
   }
 
-  private async findOrderDetails(orderId: string, userId: string): Promise<OrderDetailsResponse> {
-    const order = await this.databaseService
+  private validateOrderAccess(access: OrderAccessContext): void {
+    if (access.role === UserRoleEnum.VENDOR && !access.vendorId) {
+      throw new ForbiddenException(ERROR_MESSAGES.VENDOR_NOT_APPROVED);
+    }
+  }
+
+  private async findOrderDetails(
+    orderId: string,
+    access: OrderAccessContext,
+  ): Promise<OrderDetailsResponse | AdminOrderDetailsResponse> {
+    const isAdmin = access.role === UserRoleEnum.ADMIN;
+
+    const orderQb = this.databaseService
       .getRepository(OrderEntity)
       .createQueryBuilder("order")
       .leftJoin("order.address", "address")
-      .select(ORDER_SELECT_FIELDS.ORDER_FOR_USER_DETAILS)
-      .where("order.id = :orderId AND order.userId = :userId ", { orderId, userId })
-      .getOne();
+      .select(
+        isAdmin
+          ? [...ORDER_SELECT_FIELDS.ORDER_FOR_ADMIN_DETAILS, ...ORDER_SELECT_FIELDS.ORDER_USER_FOR_ADMIN_DETAILS]
+          : ORDER_SELECT_FIELDS.ORDER_FOR_USER_DETAILS,
+      )
+      .where("order.id = :orderId", { orderId });
+
+    if (isAdmin) {
+      orderQb.leftJoin("order.user", "user");
+    }
+
+    if (access.role === UserRoleEnum.USER) {
+      orderQb.andWhere("order.userId = :userId", { userId: access.userId });
+    }
+
+    if (access.role === UserRoleEnum.VENDOR) {
+      orderQb.innerJoin("order.vendorOrders", "accessVendorOrder", "accessVendorOrder.vendorId = :vendorId", {
+        vendorId: access.vendorId,
+      });
+    }
+
+    const order = await orderQb.getOne();
 
     if (!order) {
       throw new NotFoundException(ERROR_MESSAGES.ORDER_NOT_FOUND);
     }
 
-    const vendorOrders = await this.databaseService
+    const vendorOrdersQb = this.databaseService
       .getRepository(VendorOrderEntity)
       .createQueryBuilder("vendorOrder")
       .leftJoin("vendorOrder.vendor", "vendor")
       .leftJoinAndSelect("vendorOrder.orderItems", "orderItem")
       .select([...ORDER_SELECT_FIELDS.VENDOR_ORDER_FOR_DETAILS, ...ORDER_SELECT_FIELDS.ORDER_ITEM_FOR_DETAILS])
-      .where("vendorOrder.orderId = :orderId", { orderId })
-      .getMany();
+      .where("vendorOrder.orderId = :orderId", { orderId });
 
-    return buildOrderDetailsResponse(order as OrderWithAddress, vendorOrders as VendorOrderWithVendor[]);
+    if (access.role === UserRoleEnum.VENDOR) {
+      vendorOrdersQb.andWhere("vendorOrder.vendorId = :vendorId", { vendorId: access.vendorId });
+    }
+
+    const vendorOrders = await vendorOrdersQb.getMany();
+
+    if (isAdmin) {
+      return buildAdminOrderDetailsResponse(
+        order,
+        {
+          id: order.user.id,
+          firstName: order.user.firstName,
+          lastName: order.user.lastName,
+          email: order.user.email,
+          phoneNumber: order.user.phoneNumber,
+        },
+        vendorOrders,
+      );
+    }
+
+    return buildOrderDetailsResponse(order, vendorOrders);
   }
 
   private applyOrderFilters({
     qb,
-    userId,
+    access,
     search,
     status,
     paymentStatus,
     paymentMethod,
   }: {
     qb: SelectQueryBuilder<OrderEntity>;
-    userId: string;
+    access: OrderAccessContext;
     search?: string;
     status?: string;
     paymentStatus?: string;
     paymentMethod?: string;
   }): void {
-    qb.where("order.userId = :userId", { userId });
+    if (access.role === UserRoleEnum.USER) {
+      qb.where("order.userId = :userId", { userId: access.userId });
+    }
+
+    if (access.role === UserRoleEnum.VENDOR) {
+      qb.innerJoin("order.vendorOrders", "vendorOrder", "vendorOrder.vendorId = :vendorId", {
+        vendorId: access.vendorId,
+      });
+    }
 
     if (search) {
       qb.andWhere("order.orderNumber ILIKE :search", {
@@ -194,7 +264,7 @@ export class OrderService {
     const [data, total] = await qb.getManyAndCount();
 
     return {
-      data: buildOrderListResponse(data as OrderWithAddress[]),
+      data: buildOrderListResponse(data),
       ...(isPagination && {
         meta: createPaginationMeta(page, limit, total),
       }),
@@ -251,6 +321,6 @@ export class OrderService {
       },
       errorContext: ORDER_ERROR_CONTEXT.UPDATE_ORDER_STATUS,
     });
-    await invalidateCache(this.redisService, orderId, userId);
+    await invalidateCache(this.redisService, orderId, userId, vendorId);
   }
 }

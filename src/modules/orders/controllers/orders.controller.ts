@@ -20,7 +20,7 @@ import { ListOrdersDto } from "../dto/list-orders.dto";
 import { UpdateVendorOrderStatusDto } from "../dto/udpate-vendor-order-status.dto";
 import { SUCCESS_MESSAGES } from "../orders.constants";
 import { CheckoutResponse } from "../responses/checkout.response";
-import { OrderDetailsResponse } from "../responses/order-details.response";
+import { AdminOrderDetailsResponse, OrderDetailsResponse } from "../responses/order-details.response";
 import { OrdersListResponse } from "../responses/order-list.response";
 import { PaymentResponse } from "../responses/payment.response";
 import { CheckoutService } from "../services/checkout.service";
@@ -120,7 +120,7 @@ export class OrdersController {
     @Query() query: ListOrdersDto,
   ): Promise<Response<CommonResponseType<OrdersListResponse>>> {
     try {
-      const orders = await this.orderService.getMyOrders(req.user.id, query);
+      const orders = await this.orderService.getMyOrders({ role: UserRoleEnum.USER, userId: req.user.id }, query);
 
       return responseUtils.success(res, {
         data: orders,
@@ -129,6 +129,110 @@ export class OrdersController {
       });
     } catch (error) {
       logger.error("Error fetching user orders:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(OrdersListResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
+  @VendorStatus(VendorStatusEnum.APPROVED)
+  @RateLimit(60, 60)
+  @Get("vendor/me")
+  async getVendorOrders(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query() query: ListOrdersDto,
+  ): Promise<Response<CommonResponseType<OrdersListResponse>>> {
+    try {
+      const orders = await this.orderService.getMyOrders(
+        { role: UserRoleEnum.VENDOR, userId: req.user.id, vendorId: req.vendorProfile!.id },
+        query,
+      );
+
+      return responseUtils.success(res, {
+        data: orders,
+        status: StatusCodes.OK,
+        transformWith: OrdersListResponse,
+      });
+    } catch (error) {
+      logger.error("Error fetching vendor orders:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(OrdersListResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(60, 60)
+  @Get("admin")
+  async getAllOrders(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Query() query: ListOrdersDto,
+  ): Promise<Response<CommonResponseType<OrdersListResponse>>> {
+    try {
+      const orders = await this.orderService.getMyOrders({ role: UserRoleEnum.ADMIN, userId: req.user.id }, query);
+
+      return responseUtils.success(res, {
+        data: orders,
+        status: StatusCodes.OK,
+        transformWith: OrdersListResponse,
+      });
+    } catch (error) {
+      logger.error("Error fetching admin orders:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(AdminOrderDetailsResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.ADMIN))
+  @RateLimit(60, 60)
+  @Get("admin/:orderId")
+  async getAdminOrderDetails(
+    @Param("orderId") orderId: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<AdminOrderDetailsResponse>>> {
+    try {
+      const orderDetails = await this.orderService.getOrderDetails(orderId, {
+        role: UserRoleEnum.ADMIN,
+        userId: req.user.id,
+      });
+
+      return responseUtils.success(res, {
+        data: orderDetails,
+        status: StatusCodes.OK,
+        transformWith: AdminOrderDetailsResponse,
+      });
+    } catch (error) {
+      logger.error(`Error fetching admin order details for ID ${orderId}:`, error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(OrderDetailsResponse)
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR), VendorStatusGuard)
+  @VendorStatus(VendorStatusEnum.APPROVED)
+  @RateLimit(60, 60)
+  @Get("vendor/:orderId")
+  async getVendorOrderDetails(
+    @Param("orderId") orderId: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<OrderDetailsResponse>>> {
+    try {
+      const orderDetails = await this.orderService.getOrderDetails(orderId, {
+        role: UserRoleEnum.VENDOR,
+        userId: req.user.id,
+        vendorId: req.vendorProfile!.id,
+      });
+
+      return responseUtils.success(res, {
+        data: orderDetails,
+        status: StatusCodes.OK,
+        transformWith: OrderDetailsResponse,
+      });
+    } catch (error) {
+      logger.error(`Error fetching vendor order details for ID ${orderId}:`, error);
       return responseUtils.error({ res, error });
     }
   }
@@ -143,7 +247,10 @@ export class OrdersController {
     @Res() res: Response,
   ): Promise<Response<CommonResponseType<OrderDetailsResponse>>> {
     try {
-      const orderDetails = await this.orderService.getOrderDetails(orderId, req.user.id);
+      const orderDetails = await this.orderService.getOrderDetails(orderId, {
+        role: UserRoleEnum.USER,
+        userId: req.user.id,
+      });
 
       return responseUtils.success(res, {
         data: orderDetails,
