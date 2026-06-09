@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
@@ -259,6 +259,30 @@ export class OrdersController {
       });
     } catch (error) {
       logger.error(`Error fetching order details for ID ${orderId}:`, error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.OK })
+  @UseGuards(RoleGuard(UserRoleEnum.USER))
+  @RateLimit(10, 60)
+  @Delete(":orderId/cancel")
+  async cancelOrder(
+    @Param("orderId") orderId: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.orderService.cancelOrder(orderId, req.user.id);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.ORDER_CANCELLED,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error(`Error cancelling order ${orderId}:`, error);
       return responseUtils.error({ res, error });
     }
   }

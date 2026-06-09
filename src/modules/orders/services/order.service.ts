@@ -5,6 +5,7 @@ import { QueryRunner, SelectQueryBuilder } from "typeorm";
 import { SortOrderEnum } from "src/constants/common.constants";
 import { DatabaseService } from "src/modules/database/database.service";
 import { RazorpayService } from "src/modules/payments/razorpay.service";
+import { ProductEntity } from "src/modules/products/product.entity";
 import { RedisService } from "src/modules/redis/redis.service";
 import { UserRoleEnum } from "src/modules/users/user.constants";
 import { applyPagination } from "src/utils/helper.utils";
@@ -12,6 +13,7 @@ import { createPaginationMeta } from "src/utils/pagination.utils";
 
 import { ListOrdersDto } from "../dto/list-orders.dto";
 import { UpdateVendorOrderStatusDto } from "../dto/udpate-vendor-order-status.dto";
+import { OrderItemEntity } from "../entities/order-item.entity";
 import { OrderEntity } from "../entities/order.entity";
 import { VendorOrderEntity } from "../entities/vendor-order.entity";
 import {
@@ -322,5 +324,123 @@ export class OrderService {
       errorContext: ORDER_ERROR_CONTEXT.UPDATE_ORDER_STATUS,
     });
     await invalidateCache(this.redisService, orderId, userId, vendorId);
+  }
+
+  async cancelOrder(orderId: string, userId: string): Promise<void> {
+    await this.databaseService.executeTransaction({
+      errorContext: ORDER_ERROR_CONTEXT.CANCEL_ORDER,
+      operation: async (queryRunner: QueryRunner) => {
+        const order = await this.loadOrderForCancellation(orderId, userId, queryRunner);
+
+        if (order.status === OrderStatusEnum.CANCELLED) {
+          throw new BadRequestException(ERROR_MESSAGES.ORDER_ALREADY_CANCELLED);
+        }
+
+        const vendorOrders = await this.loadVendorOrdersForCancellation(orderId, queryRunner);
+
+        this.validateVendorOrdersForCancellation(vendorOrders);
+
+        const orderItems = await this.loadOrderItems(orderId, queryRunner);
+
+        await this.atomicStockIncrement(orderItems, queryRunner);
+
+        await this.cancelVendorOrders(vendorOrders, queryRunner);
+
+        const isOnlinePayment = order.paymentMethod === PaymentMethodEnum.RAZORPAY;
+
+        if (isOnlinePayment && order.paymentStatus === PaymentStatusEnum.PAID) {
+          await this.razorpayService.refundPayment(order.razorpayPaymentId!);
+        }
+
+        await queryRunner.manager.update(OrderEntity, order.id, {
+          status: OrderStatusEnum.CANCELLED,
+          ...(isOnlinePayment &&
+            order.paymentStatus === PaymentStatusEnum.PAID && {
+              paymentStatus: PaymentStatusEnum.REFUNDED,
+            }),
+        });
+      },
+    });
+
+    await invalidateCache(this.redisService, orderId, userId);
+  }
+
+  private async loadOrderForCancellation(
+    orderId: string,
+    userId: string,
+    queryRunner: QueryRunner,
+  ): Promise<OrderEntity> {
+    const order = await queryRunner.manager
+      .getRepository(OrderEntity)
+      .createQueryBuilder("order")
+      .select(ORDER_SELECT_FIELDS.ORDER_FOR_PAYMENT)
+      .where("order.id = :orderId AND order.userId = :userId", { orderId, userId })
+      .setLock("pessimistic_write")
+      .getOne();
+
+    if (!order) {
+      throw new NotFoundException(ERROR_MESSAGES.ORDER_NOT_FOUND);
+    }
+
+    return order;
+  }
+
+  private async loadVendorOrdersForCancellation(
+    orderId: string,
+    queryRunner: QueryRunner,
+  ): Promise<VendorOrderEntity[]> {
+    return queryRunner.manager
+      .getRepository(VendorOrderEntity)
+      .createQueryBuilder("vendorOrder")
+      .select(ORDER_SELECT_FIELDS.VENDOR_ORDER)
+      .where("vendorOrder.orderId = :orderId", { orderId })
+      .getMany();
+  }
+
+  private validateVendorOrdersForCancellation(vendorOrders: VendorOrderEntity[]): void {
+    const cancellableStatuses = new Set([VendorOrderStatusEnum.PENDING, VendorOrderStatusEnum.PROCESSING]);
+
+    for (const vendorOrder of vendorOrders) {
+      if (!cancellableStatuses.has(vendorOrder.status)) {
+        throw new BadRequestException(ERROR_MESSAGES.VENDOR_ORDER_NOT_CANCELLABLE);
+      }
+    }
+  }
+
+  private async loadOrderItems(orderId: string, queryRunner: QueryRunner): Promise<OrderItemEntity[]> {
+    return queryRunner.manager
+      .getRepository(OrderItemEntity)
+      .createQueryBuilder("orderItem")
+      .select(ORDER_SELECT_FIELDS.ORDER_ITEM)
+      .innerJoin(VendorOrderEntity, "vendorOrder", "vendorOrder.id = orderItem.vendorOrderId")
+      .where("vendorOrder.orderId = :orderId", { orderId })
+      .getMany();
+  }
+
+  private async atomicStockIncrement(orderItems: OrderItemEntity[], queryRunner: QueryRunner): Promise<void> {
+    for (const orderItem of orderItems) {
+      await queryRunner.manager
+        .createQueryBuilder()
+        .update(ProductEntity)
+        .set({ stock: () => `stock + ${orderItem.quantity}` })
+        .where("id = :productId", { productId: orderItem.productId })
+        .execute();
+    }
+  }
+
+  private async cancelVendorOrders(vendorOrders: VendorOrderEntity[], queryRunner: QueryRunner): Promise<void> {
+    const vendorOrderIds = vendorOrders.map(({ id }) => id);
+
+    await queryRunner.manager
+      .getRepository(VendorOrderEntity)
+      .createQueryBuilder()
+      .update(VendorOrderEntity)
+      .set({
+        status: VendorOrderStatusEnum.CANCELLED,
+      })
+      .where("id IN (:...vendorOrderIds)", {
+        vendorOrderIds,
+      })
+      .execute();
   }
 }

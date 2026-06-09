@@ -27,6 +27,9 @@ export const ERROR_MESSAGES = {
   INVALID_SORT_FIELD: "Invalid sort field for order listing",
   INVALID_VENDOR_ORDER_STATUS_TRANSITION: (currentStatus: string, nextStatus: string) =>
     `Invalid vendor status transition from ${currentStatus} to ${nextStatus}`,
+  ORDER_CANNOT_BE_CANCELLED: "Order cannot be cancelled",
+  ORDER_ALREADY_CANCELLED: "Order is already cancelled",
+  VENDOR_ORDER_NOT_CANCELLABLE: "One or more vendor orders cannot be cancelled",
 };
 
 export const VALID_VENDOR_ORDER_STATUS_TRANSITION: Record<VendorOrderStatusEnum, VendorOrderStatusEnum[]> = {
@@ -151,6 +154,7 @@ export const ORDER_SELECT_FIELDS = {
     "order.paymentMethod",
     "order.paymentStatus",
     "order.razorpayOrderId",
+    "order.razorpayPaymentId",
     "order.status",
   ],
   ORDER_FOR_WEBHOOK: [
@@ -227,6 +231,7 @@ export const ORDER_ERROR_CONTEXT = {
   STOCK_DECREMENT: "Stock Decrement",
   REFUND_PAYMENT: "Refund Payment",
   UPDATE_ORDER_STATUS: "Update Order Status",
+  CANCEL_ORDER: "Cancel Order",
 };
 
 export const PAYMENT_STATUS_RAZORPAY = {
