@@ -23,6 +23,7 @@ import { PaymentsModule } from "./modules/payments/payments.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { RateLimitGuard } from "./modules/rateLimiter/guards/rate-limit.guard";
 import { RateLimiterModule } from "./modules/rateLimiter/rate-limiter.module";
+import { ReviewsModule } from "./modules/reviews/reviews.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
 
@@ -44,6 +45,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     PaymentsModule,
     OrdersModule,
     AnalyticsModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [

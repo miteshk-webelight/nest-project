@@ -29,7 +29,7 @@ export class MediaController {
   @ApiSwaggerResponse(MediaResponse, {
     status: StatusCodes.CREATED,
   })
-  @UseGuards(RoleGuard(UserRoleEnum.VENDOR))
+  @UseGuards(RoleGuard(UserRoleEnum.VENDOR, UserRoleEnum.USER))
   @RateLimit(10, 60)
   @Post("upload")
   @ApiConsumes("multipart/form-data")

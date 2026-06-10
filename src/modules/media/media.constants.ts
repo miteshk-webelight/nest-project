@@ -28,4 +28,5 @@ export const MEDIA_SELECT_FIELDS = {
 };
 export enum MediaModuleEnum {
   PRODUCT = "PRODUCT",
+  REVIEW = "REVIEW",
 }
