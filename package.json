@@ -31,7 +31,7 @@
     "build:watch": "webpack --config webpack.config.js --watch",
     "start:webpack": "node dist/main.js",
     "type-check": "tsc --noEmit",
-    "prepare": "husky install",
+    "prepare": "husky install || true",
     "sonar": "node ./sonar-analysis.js"
   },
   "dependencies": {
