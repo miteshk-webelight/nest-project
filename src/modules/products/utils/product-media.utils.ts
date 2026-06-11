@@ -1,6 +1,10 @@
 import { MediaModuleEnum } from "../../media/media.constants";
-
-import { validateFinalMediaCount, validateNewMediaIds, validateRemovedMediaIds } from "./media-validation.utils";
+import {
+  validateFinalMediaCount,
+  validateNewMediaIds,
+  validateRemovedMediaIds,
+} from "../../media/utils/media-validation.utils";
+import { PRODUCT_MEDIA_COUNTS } from "../products.constants";
 
 import type { MediaService } from "../../media/media.service";
 import type { UpdateProductDto } from "../dto/update-product.dto";
@@ -20,13 +24,27 @@ export async function validateProductMediaUpdates(params: {
 
   const existingMedia = await mediaService.getMediaByRecord(MediaModuleEnum.PRODUCT, productId);
 
-  validateRemovedMediaIds(dto.removedMediaIds, existingMedia);
+  validateRemovedMediaIds({
+    removedMediaIds: dto.removedMediaIds,
+    existingMedia,
+  });
 
   const availableMedia = dto.newMediaIds ? await mediaService.getAvailableMediaByIds(dto.newMediaIds) : [];
 
-  validateNewMediaIds(dto.newMediaIds, dto.removedMediaIds, vendorUserId, availableMedia);
+  validateNewMediaIds({
+    newMediaIds: dto.newMediaIds,
+    removedMediaIds: dto.removedMediaIds,
+    userId: vendorUserId,
+    availableMedia,
+  });
 
-  validateFinalMediaCount(existingMedia.length, dto.removedMediaIds?.length ?? 0, dto.newMediaIds?.length ?? 0);
+  validateFinalMediaCount({
+    existingMediaCount: existingMedia.length,
+    removedMediaCount: dto.removedMediaIds?.length ?? 0,
+    newMediaCount: dto.newMediaIds?.length ?? 0,
+    minCount: PRODUCT_MEDIA_COUNTS.MIN,
+    maxCount: PRODUCT_MEDIA_COUNTS.MAX,
+  });
 }
 
 /**

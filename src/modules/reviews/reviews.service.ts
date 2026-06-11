@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 
 import { QueryRunner } from "typeorm";
 
@@ -18,11 +18,17 @@ import { MediaEntity } from "../media/media.entity";
 
 import { CreateReviewDto } from "./dto/create-review.dto";
 import { GetReviewsByProductDto } from "./dto/get-reviews-by-product.dto";
+import { UpdateReviewDto } from "./dto/update-review.dto";
 import { ReviewsEntity } from "./entities/reviews.entity";
 import { ReviewMedia, ReviewsListResponse } from "./responses/reviews-list.response";
 import { ERROR_MESSAGES, REVIEW_CACHE_TTL, REVIEW_SELECT_FIELDS } from "./reviews.constants";
 import { buildReviewsByProductCacheKey, clearReviewsByProductCache } from "./utils/review-cache.utils";
-import { attachReviewMedia, validateReviewMedia } from "./utils/review-media.utils";
+import {
+  attachReviewMedia,
+  validateReviewMedia,
+  validateReviewMediaUpdates,
+  syncReviewMedia,
+} from "./utils/review-media.utils";
 import {
   applyReviewFilters,
   applyReviewSort,
@@ -30,6 +36,7 @@ import {
   getRatingDistribution,
 } from "./utils/review.utils";
 
+import type { GetOrFailMyReviewParams } from "./reviews.types";
 import type { PaginationMetaResponse } from "src/types/pagination.types";
 
 @Injectable()
@@ -88,6 +95,72 @@ export class ReviewsService {
     await clearReviewsByProductCache(this.redisService, dto.productId);
 
     return newReview;
+  }
+
+  private async getOrFailMyReview({ queryRunner, userId, reviewId }: GetOrFailMyReviewParams): Promise<ReviewsEntity> {
+    const review = await queryRunner.manager
+      .getRepository(ReviewsEntity)
+      .createQueryBuilder("review")
+      .where("review.id = :reviewId", { reviewId })
+      .getOne();
+
+    if (!review) {
+      throw new NotFoundException(ERROR_MESSAGES.REVIEW_NOT_FOUND);
+    }
+
+    if (review.userId !== userId) {
+      throw new ForbiddenException(ERROR_MESSAGES.UNAUTHORIZED_REVIEW_UPDATE);
+    }
+
+    return review;
+  }
+
+  async updateReview(userId: string, reviewId: string, dto: UpdateReviewDto): Promise<ReviewsEntity> {
+    const keys = Object.keys(dto) as (keyof UpdateReviewDto)[];
+    if (keys.length === 0) {
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_REVIEW_UPDATE_PAYLOAD);
+    }
+
+    const updatedReview = await this.databaseService.executeTransaction({
+      operation: async (queryRunner: QueryRunner) => {
+        const reviewRepository = queryRunner.manager.getRepository(ReviewsEntity);
+
+        const review = await this.getOrFailMyReview({ queryRunner, userId, reviewId });
+
+        await validateReviewMediaUpdates({
+          dto,
+          reviewId,
+          userId,
+          mediaService: this.mediaService,
+        });
+
+        const ratingChanged = dto.rating !== undefined && dto.rating !== review.rating;
+
+        review.rating = dto.rating ?? review.rating;
+        review.comment = dto.comment ?? review.comment;
+        review.title = dto.title ?? review.title;
+
+        const savedReview = await reviewRepository.save(review);
+
+        await syncReviewMedia({
+          dto,
+          reviewId,
+          mediaService: this.mediaService,
+          queryRunner,
+        });
+
+        if (ratingChanged) {
+          await this.updateProductRating(queryRunner, review.productId);
+        }
+
+        return savedReview;
+      },
+      errorContext: "Update Review",
+    });
+
+    await clearReviewsByProductCache(this.redisService, updatedReview.productId);
+
+    return updatedReview;
   }
 
   private async validateAndGetProductForReview(productId: string): Promise<ProductEntity> {

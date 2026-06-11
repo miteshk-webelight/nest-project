@@ -14,6 +14,8 @@ export const ERROR_MESSAGES = {
   INVALID_MEDIA_IDS: "One or more media IDs are invalid",
   MEDIA_MUST_BE_UNATTACHED: "Media must not be attached to another record",
   YOU_CAN_ONLY_ATTACH_MEDIA_YOU_UPLOADED: "You can only attach media you uploaded",
+  UNAUTHORIZED_REVIEW_UPDATE: "You are not authorized to update this review",
+  INVALID_REVIEW_UPDATE_PAYLOAD: "Please provide at least one field to update",
 };
 
 export const SUCCESS_MESSAGES = {

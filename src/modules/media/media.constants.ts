@@ -17,6 +17,13 @@ export const ERROR_MESSAGES = {
   MAX_FILES_EXCEEDED: "Maximum files limit exceeded",
   INVALID_MEDIA_IDS: "One or more media IDs are invalid",
   NO_FILES_UPLOADED: "No files uploaded",
+  REMOVED_MEDIA_IDS_MUST_BE_UNIQUE: "Removed media IDs must be unique",
+  REMOVED_MEDIA_MUST_BELONG_TO_RECORD: "Removed media must belong to the current record",
+  NEW_MEDIA_IDS_MUST_BE_UNIQUE: "New media IDs must be unique",
+  NEW_MEDIA_IDS_MUST_NOT_OVERLAP_WITH_REMOVED: "New media IDs must not overlap with removed media IDs",
+  YOU_CAN_ONLY_ATTACH_MEDIA_YOU_UPLOADED: "You can only attach media you uploaded",
+  MEDIA_MUST_NOT_BE_ATTACHED_TO_ANOTHER_RECORD: "Media must not be attached to another record",
+  INVALID_MEDIA_COUNT: "Invalid media count",
 };
 export const SUCCESS_MESSAGES = {
   MEDIA_UPLOADED_SUCCESS: "Media uploaded successfully",

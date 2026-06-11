@@ -41,7 +41,7 @@ export const buildReviewsByProductCacheKey = (query: GetReviewsByProductDto): st
 };
 
 export const clearReviewsByProductCache = async (redisService: RedisService, productId: string): Promise<void> => {
-  const keys = await redisService.keys(getReviewsByProductCacheKey(`*-${productId}-*`));
+  const keys = await redisService.keys(getReviewsByProductCacheKey(`*${productId}*`));
 
   if (keys.length > 0) {
     await redisService.delete(keys);

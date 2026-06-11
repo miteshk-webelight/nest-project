@@ -1,36 +1,38 @@
 import { BadRequestException } from "@nestjs/common";
 
-import { ERROR_MESSAGES as MEDIA_ERROR_MESSAGES } from "../../media/media.constants";
-import { ERROR_MESSAGES, ERROR_MESSAGES as PRODUCT_ERROR_MESSAGES, PRODUCT_MEDIA_COUNTS } from "../products.constants";
+import { ERROR_MESSAGES } from "../media.constants";
 
-import type { MediaEntity } from "../../media/media.entity";
+import type {
+  ValidateFinalMediaCountParams,
+  ValidateNewMediaIdsParams,
+  ValidateRemovedMediaIdsParams,
+} from "../media.types";
 
 /**
  * Validates that:
  * - removed media ids are unique
- * - all removed media belong to the current product
+ * - all removed media belong to the current record
  *
- * This ensures vendors cannot remove:
+ * This ensures users cannot remove:
  * - duplicate media entries
- * - media attached to another product
+ * - media attached to another record
  * - non-existing media
  */
-export function validateRemovedMediaIds(removedMediaIds: string[] | undefined, existingMedia: MediaEntity[]): void {
+export function validateRemovedMediaIds({ removedMediaIds, existingMedia }: ValidateRemovedMediaIdsParams): void {
   if (!removedMediaIds || removedMediaIds.length === 0) {
     return;
   }
 
-  // Ensuring that there are no duplicated media ids
   const existingMediaIds = new Set(existingMedia.map(({ id }) => id));
   const uniqueRemovedIds = new Set(removedMediaIds);
 
   if (uniqueRemovedIds.size !== removedMediaIds.length) {
-    throw new BadRequestException(ERROR_MESSAGES.REMOVED_MEDIA_MUST_BE_UNIQUE);
+    throw new BadRequestException(ERROR_MESSAGES.REMOVED_MEDIA_IDS_MUST_BE_UNIQUE);
   }
 
   for (const mediaId of removedMediaIds) {
     if (!existingMediaIds.has(mediaId)) {
-      throw new BadRequestException(ERROR_MESSAGES.REMOVED_MEDIA_BELONG_TO_CURRENT_PRODUCT);
+      throw new BadRequestException(ERROR_MESSAGES.REMOVED_MEDIA_MUST_BELONG_TO_RECORD);
     }
   }
 }
@@ -48,14 +50,14 @@ function validateNewMediaUniqueness(newMediaIds: string[], removedMediaIds: stri
   const uniqueNewIds = new Set(newMediaIds);
 
   if (uniqueNewIds.size !== newMediaIds.length) {
-    throw new BadRequestException(ERROR_MESSAGES.NEW_MEDIA_IDS_MUST_UNIQUE);
+    throw new BadRequestException(ERROR_MESSAGES.NEW_MEDIA_IDS_MUST_BE_UNIQUE);
   }
 
   const removedSet = new Set(removedMediaIds ?? []);
 
   for (const mediaId of newMediaIds) {
     if (removedSet.has(mediaId)) {
-      throw new BadRequestException(ERROR_MESSAGES.NEW_MEDIA_NOT_OVERLAP_WITH_REMOVED_IDS);
+      throw new BadRequestException(ERROR_MESSAGES.NEW_MEDIA_IDS_MUST_NOT_OVERLAP_WITH_REMOVED);
     }
   }
 }
@@ -63,18 +65,18 @@ function validateNewMediaUniqueness(newMediaIds: string[], removedMediaIds: stri
 /**
  * Validates that:
  * - media exists
- * - media was uploaded by the current vendor
+ * - media was uploaded by the current user/creator
  * - media is currently unattached to any module/record
  *
  * Prevents:
- * - attaching another vendor's media
+ * - attaching another user's media
  * - reusing already attached media
  * - attaching invalid media ids
  */
 function validateMediaOwnershipAndAvailability(
   newMediaIds: string[],
-  vendorUserId: string,
-  availableMedia: MediaEntity[],
+  userId: string,
+  availableMedia: ValidateNewMediaIdsParams["availableMedia"],
 ): void {
   const availableMediaMap = new Map(availableMedia.map((media) => [media.id, media]));
 
@@ -82,15 +84,15 @@ function validateMediaOwnershipAndAvailability(
     const media = availableMediaMap.get(mediaId);
 
     if (!media) {
-      throw new BadRequestException(MEDIA_ERROR_MESSAGES.INVALID_MEDIA_IDS);
+      throw new BadRequestException(ERROR_MESSAGES.INVALID_MEDIA_IDS);
     }
 
-    if (media.createdBy !== vendorUserId) {
+    if (media.createdBy !== userId) {
       throw new BadRequestException(ERROR_MESSAGES.YOU_CAN_ONLY_ATTACH_MEDIA_YOU_UPLOADED);
     }
 
     if (media.recordId || media.module) {
-      throw new BadRequestException(ERROR_MESSAGES.MEDIA_MUST_NOT_ATTACHED_TO_ANOTHER_RECORD);
+      throw new BadRequestException(ERROR_MESSAGES.MEDIA_MUST_NOT_BE_ATTACHED_TO_ANOTHER_RECORD);
     }
   }
 }
@@ -104,18 +106,18 @@ function validateMediaOwnershipAndAvailability(
  * - ownership validation
  * - media availability validation
  */
-export function validateNewMediaIds(
-  newMediaIds: string[] | undefined,
-  removedMediaIds: string[] | undefined,
-  vendorUserId: string,
-  availableMedia: MediaEntity[],
-): void {
+export function validateNewMediaIds({
+  newMediaIds,
+  removedMediaIds,
+  userId,
+  availableMedia,
+}: ValidateNewMediaIdsParams): void {
   if (!newMediaIds?.length) {
     return;
   }
 
   validateNewMediaUniqueness(newMediaIds, removedMediaIds);
-  validateMediaOwnershipAndAvailability(newMediaIds, vendorUserId, availableMedia);
+  validateMediaOwnershipAndAvailability(newMediaIds, userId, availableMedia);
 }
 
 /**
@@ -123,19 +125,17 @@ export function validateNewMediaIds(
  *
  * Formula:
  * finalMediaCount = existingMediaCount - removedMediaCount + newMediaCount
- *
- * Rules:
- * - minimum media count = 1
- * - maximum media count = 5
  */
-export function validateFinalMediaCount(
-  existingMediaCount: number,
-  removedMediaCount: number,
-  newMediaCount: number,
-): void {
+export function validateFinalMediaCount({
+  existingMediaCount,
+  removedMediaCount,
+  newMediaCount,
+  minCount,
+  maxCount,
+}: ValidateFinalMediaCountParams): void {
   const finalMediaCount = existingMediaCount - removedMediaCount + newMediaCount;
 
-  if (finalMediaCount < PRODUCT_MEDIA_COUNTS.MIN || finalMediaCount > PRODUCT_MEDIA_COUNTS.MAX) {
-    throw new BadRequestException(PRODUCT_ERROR_MESSAGES.INVALID_IMAGES_COUNT);
+  if (finalMediaCount < minCount || finalMediaCount > maxCount) {
+    throw new BadRequestException(ERROR_MESSAGES.INVALID_MEDIA_COUNT);
   }
 }
