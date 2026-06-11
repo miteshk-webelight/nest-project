@@ -2,6 +2,7 @@ export const REVIEW_CACHE_TTL = 300;
 
 export const ERROR_MESSAGES = {
   REVIEW_NOT_FOUND: "Review not found",
+  REVIEWS_NOT_EXISTS_FOR_THE_PRODUCT: "No review yet for this product",
   PRODUCT_NOT_FOUND: "Product not found",
   PRODUCT_NOT_APPROVED: "Product is not approved",
   PRODUCT_NOT_ACTIVE: "Product is not active",
@@ -53,8 +54,10 @@ export const REVIEW_SELECT_FIELDS = {
   PRODUCT: ["product.id", "product.name", "product.slug", "product.status", "product.isActive"],
   VENDOR: ["vendor.id", "vendor.status"],
   USER: ["user.id"],
+  MEDIA: ["media.id", "media.filePath", "media.recordId"],
   AVG_RATING: "AVG(review.rating)",
   TOTAL_REVIEW_COUNT: "COUNT(review.id)",
+  RATING: "review.rating",
 };
 
 export const REVIEW_CONSTRAINTS = {
@@ -68,4 +71,12 @@ export enum ReviewSortByEnum {
   UPDATED_AT = "updatedAt",
   RATING = "rating",
   LIKES_COUNT = "likesCount",
+}
+
+export enum ReviewSortEnum {
+  NEWEST = "NEWEST",
+  OLDEST = "OLDEST",
+  HIGHEST_RATING = "HIGHEST_RATING",
+  LOWEST_RATING = "LOWEST_RATING",
+  MOST_LIKED = "MOST_LIKED",
 }

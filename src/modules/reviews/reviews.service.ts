@@ -8,18 +8,36 @@ import { OrderItemEntity } from "src/modules/orders/entities/order-item.entity";
 import { VendorOrderStatusEnum } from "src/modules/orders/orders.enums";
 import { ProductEntity } from "src/modules/products/product.entity";
 import { ProductStatusEnum } from "src/modules/products/products.constants";
+import { RedisService } from "src/modules/redis/redis.service";
 import { VendorStatusEnum } from "src/modules/vendors/vendors.constants";
+import { applyPagination } from "src/utils/helper.utils";
+import { createPaginationMeta } from "src/utils/pagination.utils";
+
+import { MediaModuleEnum } from "../media/media.constants";
+import { MediaEntity } from "../media/media.entity";
 
 import { CreateReviewDto } from "./dto/create-review.dto";
+import { GetReviewsByProductDto } from "./dto/get-reviews-by-product.dto";
 import { ReviewsEntity } from "./entities/reviews.entity";
-import { ERROR_MESSAGES, REVIEW_SELECT_FIELDS } from "./reviews.constants";
+import { ReviewMedia, ReviewsListResponse } from "./responses/reviews-list.response";
+import { ERROR_MESSAGES, REVIEW_CACHE_TTL, REVIEW_SELECT_FIELDS } from "./reviews.constants";
+import { buildReviewsByProductCacheKey, clearReviewsByProductCache } from "./utils/review-cache.utils";
 import { attachReviewMedia, validateReviewMedia } from "./utils/review-media.utils";
+import {
+  applyReviewFilters,
+  applyReviewSort,
+  buildReviewsListResponse,
+  getRatingDistribution,
+} from "./utils/review.utils";
+
+import type { PaginationMetaResponse } from "src/types/pagination.types";
 
 @Injectable()
 export class ReviewsService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly mediaService: MediaService,
+    private readonly redisService: RedisService,
   ) {}
 
   async createReview(userId: string, dto: CreateReviewDto): Promise<ReviewsEntity> {
@@ -66,6 +84,8 @@ export class ReviewsService {
       },
       errorContext: "Create Review",
     });
+
+    await clearReviewsByProductCache(this.redisService, dto.productId);
 
     return newReview;
   }
@@ -140,5 +160,104 @@ export class ReviewsService {
       averageRating: avgRating,
       reviewCount,
     });
+  }
+
+  async getReviewsByProduct(query: GetReviewsByProductDto): Promise<ReviewsListResponse> {
+    const cacheKey = buildReviewsByProductCacheKey(query);
+
+    return this.redisService.getOrSet<ReviewsListResponse>({
+      key: cacheKey,
+      ttl: REVIEW_CACHE_TTL,
+      fetcher: async () => {
+        const product = await this.getProductForReviews(query.productId);
+
+        const reviews = await this.fetchReviews(query);
+
+        if (!reviews.length) throw new NotFoundException(ERROR_MESSAGES.REVIEWS_NOT_EXISTS_FOR_THE_PRODUCT);
+
+        const reviewIds = reviews.map(({ id }) => id);
+        const medias = await this.getMediasByReviewIds(reviewIds);
+
+        const ratingDistribution = await this.fetchRatingDistribution(query.productId);
+
+        const meta = query.isPagination ? await this.buildPaginationMeta(query) : undefined;
+
+        return buildReviewsListResponse({
+          product,
+          reviews,
+          ratingDistribution,
+          medias: medias as ReviewMedia[],
+          meta,
+        });
+      },
+    });
+  }
+
+  private async getProductForReviews(productId: string): Promise<ProductEntity> {
+    const product = await this.databaseService
+      .getRepository(ProductEntity)
+      .createQueryBuilder("product")
+      .select(REVIEW_SELECT_FIELDS.PRODUCT)
+      .where("product.id = :productId", { productId })
+      .getOne();
+
+    if (!product) {
+      throw new NotFoundException(ERROR_MESSAGES.PRODUCT_NOT_FOUND);
+    }
+
+    return product;
+  }
+
+  private async fetchReviews(query: GetReviewsByProductDto): Promise<ReviewsEntity[]> {
+    const qb = this.databaseService
+      .getRepository(ReviewsEntity)
+      .createQueryBuilder("review")
+      .leftJoin("review.user", "user")
+      .select(REVIEW_SELECT_FIELDS.DETAILS);
+
+    applyReviewFilters(qb, query);
+    applyReviewSort(qb, query.reviewSortBy);
+
+    if (query.isPagination) {
+      applyPagination(qb, query);
+    }
+
+    return qb.getMany();
+  }
+
+  private async fetchRatingDistribution(productId: string): Promise<Record<string, number>> {
+    const qb = this.databaseService.getRepository(ReviewsEntity).createQueryBuilder("review");
+
+    return getRatingDistribution(productId, qb);
+  }
+
+  private async getMediasByReviewIds(reviewIds: string[]): Promise<MediaEntity[]> {
+    const medias = await this.databaseService
+      .getRepository(MediaEntity)
+      .createQueryBuilder("media")
+      .select(REVIEW_SELECT_FIELDS.MEDIA)
+      .where("media.module = :module AND media.recordId IN (:...reviewIds)", {
+        module: MediaModuleEnum.REVIEW,
+        reviewIds,
+      })
+      .getMany();
+
+    return medias;
+  }
+
+  private async buildPaginationMeta(query: GetReviewsByProductDto): Promise<PaginationMetaResponse> {
+    const qb = this.databaseService
+      .getRepository(ReviewsEntity)
+      .createQueryBuilder("review")
+      .select(REVIEW_SELECT_FIELDS.ID);
+
+    applyReviewFilters(qb, query);
+
+    const total = await qb.getCount();
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
+
+    return createPaginationMeta(page, limit, total);
   }
 }
