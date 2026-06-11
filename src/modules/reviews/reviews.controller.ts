@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
@@ -94,6 +94,30 @@ export class ReviewsController {
       });
     } catch (error) {
       logger.error("Error updating review:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
+
+  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.OK })
+  @Delete(":id")
+  @UseGuards(RoleGuard(UserRoleEnum.USER))
+  @RateLimit(20, 60)
+  async deleteReview(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Param("id") id: string,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      await this.reviewsService.deleteReview(req.user.id, id);
+
+      return responseUtils.success(res, {
+        data: {
+          message: SUCCESS_MESSAGES.REVIEW_DELETED,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error("Error Deleting review:", error);
       return responseUtils.error({ res, error });
     }
   }

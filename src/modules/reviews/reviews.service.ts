@@ -28,6 +28,7 @@ import {
   validateReviewMedia,
   validateReviewMediaUpdates,
   syncReviewMedia,
+  detachReviewMedia,
 } from "./utils/review-media.utils";
 import {
   applyReviewFilters,
@@ -161,6 +162,38 @@ export class ReviewsService {
     await clearReviewsByProductCache(this.redisService, updatedReview.productId);
 
     return updatedReview;
+  }
+
+  async deleteReview(userId: string, reviewId: string): Promise<void> {
+    const deletedReview = await this.databaseService.executeTransaction({
+      errorContext: "Delete Review",
+      operation: async (queryRunner: QueryRunner) => {
+        const review = await this.getOrFailMyReview({
+          queryRunner,
+          userId,
+          reviewId,
+        });
+
+        const medias = await this.getMediasByReviewIds([reviewId]);
+
+        if (medias.length) {
+          const mediaIds = medias.map(({ id }) => id);
+
+          await detachReviewMedia({
+            mediaIds,
+            mediaService: this.mediaService,
+            queryRunner,
+          });
+        }
+
+        await queryRunner.manager.remove(ReviewsEntity, review);
+        await this.updateProductRating(queryRunner, review.productId);
+
+        return review;
+      },
+    });
+
+    await clearReviewsByProductCache(this.redisService, deletedReview.productId);
   }
 
   private async validateAndGetProductForReview(productId: string): Promise<ProductEntity> {

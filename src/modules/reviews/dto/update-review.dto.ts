@@ -1,7 +1,7 @@
 import { ApiProperty } from "@nestjs/swagger";
 
 import { Transform } from "class-transformer";
-import { IsArray, IsInt, IsOptional, Max, Min, IsString } from "class-validator";
+import { IsArray, IsInt, IsOptional, Max, Min } from "class-validator";
 
 import { TrimArrayString } from "src/decorators/trim-array-string.decorator";
 import { TrimString } from "src/decorators/trim-string.decorator";

@@ -56,7 +56,7 @@ export const REVIEW_SELECT_FIELDS = {
   PRODUCT: ["product.id", "product.name", "product.slug", "product.status", "product.isActive"],
   VENDOR: ["vendor.id", "vendor.status"],
   USER: ["user.id"],
-  MEDIA: ["media.id", "media.filePath", "media.recordId"],
+  MEDIA: ["media.id", "media.filePath", "media.recordId", "media.module"],
   AVG_RATING: "AVG(review.rating)",
   TOTAL_REVIEW_COUNT: "COUNT(review.id)",
   RATING: "review.rating",
