@@ -1,9 +1,10 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, Res, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from "@nestjs/common";
 import { ApiTags } from "@nestjs/swagger";
 
 import { StatusCodes } from "http-status-codes";
 
 import { ApiTag } from "src/constants/api-tags.constants";
+import { CurrentUser } from "src/decorators/current-user.decorator";
 import { RoleGuard } from "src/guards/role-guard";
 import { RateLimit } from "src/modules/rateLimiter/decorators/rate-limit.decorator";
 import { UserRoleEnum } from "src/modules/users/user.constants";
@@ -21,7 +22,7 @@ import { ReviewsListResponse } from "./responses/reviews-list.response";
 import { SUCCESS_MESSAGES } from "./reviews.constants";
 import { ReviewsService } from "./reviews.service";
 
-import type { Request, Response } from "express";
+import type { Response } from "express";
 
 @ApiTags(ApiTag.Reviews)
 @Controller("reviews")
@@ -33,12 +34,12 @@ export class ReviewsController {
   @UseGuards(RoleGuard(UserRoleEnum.USER))
   @RateLimit(10, 60)
   async createReview(
-    @Req() req: Request,
+    @CurrentUser("id") userId: string,
     @Res() res: Response,
     @Body() dto: CreateReviewDto,
   ): Promise<Response<CommonResponseType<ReviewResponse>>> {
     try {
-      const review = await this.reviewsService.createReview(req.user.id, dto);
+      const review = await this.reviewsService.createReview(userId, dto);
 
       return responseUtils.success(res, {
         data: review,
@@ -78,13 +79,13 @@ export class ReviewsController {
   @UseGuards(RoleGuard(UserRoleEnum.USER))
   @RateLimit(20, 60)
   async updateReview(
-    @Req() req: Request,
+    @CurrentUser("id") userId: string,
     @Res() res: Response,
     @Param("id") id: string,
     @Body() dto: UpdateReviewDto,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.reviewsService.updateReview(req.user.id, id, dto);
+      await this.reviewsService.updateReview(userId, id, dto);
 
       return responseUtils.success(res, {
         data: {
@@ -103,12 +104,12 @@ export class ReviewsController {
   @UseGuards(RoleGuard(UserRoleEnum.USER))
   @RateLimit(20, 60)
   async deleteReview(
-    @Req() req: Request,
+    @CurrentUser("id") userId: string,
     @Res() res: Response,
     @Param("id") id: string,
   ): Promise<Response<CommonResponseType<MessageResponse>>> {
     try {
-      await this.reviewsService.deleteReview(req.user.id, id);
+      await this.reviewsService.deleteReview(userId, id);
 
       return responseUtils.success(res, {
         data: {

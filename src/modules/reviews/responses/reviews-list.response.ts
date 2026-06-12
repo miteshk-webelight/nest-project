@@ -23,7 +23,7 @@ export class ReviewMedia {
 export class ReviewWithMediaResponse extends ReviewResponse {
   @Expose()
   @Type(() => ReviewMedia)
-  @ApiPropertyWritable({ type: () => ReviewMedia, isArray: true })
+  @ApiPropertyWritable({ type: () => ReviewMedia, isArray: true, nullable: true })
   media?: ReviewMedia[];
 }
 
@@ -77,6 +77,6 @@ export class ReviewsListResponse {
 
   @Expose()
   @Type(() => PaginationMetaResponse)
-  @ApiPropertyWritable({ type: () => PaginationMetaResponse })
+  @ApiPropertyWritable({ type: () => PaginationMetaResponse, nullable: true })
   meta?: PaginationMetaResponse;
 }

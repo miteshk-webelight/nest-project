@@ -345,7 +345,12 @@ export class ProductsService {
 
         const savedProduct = await productRepository.save(product);
 
-        await this.mediaService.attachMediaToRecord(mediaIds, MediaModuleEnum.PRODUCT, savedProduct.id, queryRunner);
+        await this.mediaService.attachMediaToRecord({
+          mediaIds,
+          module: MediaModuleEnum.PRODUCT,
+          recordId: savedProduct.id,
+          queryRunner,
+        });
         const media = await this.mediaService.getMediaByRecord(MediaModuleEnum.PRODUCT, savedProduct.id);
 
         return { ...savedProduct, media };

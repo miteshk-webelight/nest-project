@@ -63,6 +63,11 @@ export async function syncProductMedia(params: {
   }
 
   if (dto.newMediaIds?.length) {
-    await mediaService.attachMediaToRecord(dto.newMediaIds, MediaModuleEnum.PRODUCT, productId, queryRunner);
+    await mediaService.attachMediaToRecord({
+      mediaIds: dto.newMediaIds,
+      module: MediaModuleEnum.PRODUCT,
+      recordId: productId,
+      queryRunner,
+    });
   }
 }

@@ -127,12 +127,9 @@ export class MediaService {
     }
   }
 
-  async attachMediaToRecord(
-    mediaIds: string[],
-    module: MediaModuleEnum,
-    recordId: string,
-    queryRunner: QueryRunner,
-  ): Promise<void> {
+  async attachMediaToRecord({ mediaIds, module, recordId, queryRunner }): Promise<void> {
+    if (!mediaIds?.length) return;
+
     const mediaRepository = queryRunner.manager.getRepository(MediaEntity);
 
     await mediaRepository
@@ -162,7 +159,9 @@ export class MediaService {
       .getMany();
   }
 
-  async detachMediaFromRecord(mediaIds: string[], queryRunner: QueryRunner): Promise<void> {
+  async detachMediaFromRecord(mediaIds: string[] | undefined, queryRunner: QueryRunner): Promise<void> {
+    if (!mediaIds?.length) return;
+
     const mediaRepository = queryRunner.manager.getRepository(MediaEntity);
     await mediaRepository
       .createQueryBuilder()

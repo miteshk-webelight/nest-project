@@ -8,12 +8,10 @@ import {
 } from "../../media/utils/media-validation.utils";
 import { ERROR_MESSAGES, REVIEW_CONSTRAINTS } from "../reviews.constants";
 
-import type { MediaEntity } from "../../media/media.entity";
 import type {
-  AttachReviewMediaParams,
-  DetachReviewMediaParams,
   ReviewMediaUpdatesParams,
   SyncReviewMediaParams,
+  ValidateMediaOwnershipAndAvailabilityParams,
   ValidateReviewMediaParams,
 } from "../reviews.types";
 
@@ -31,11 +29,11 @@ function validateMediaIdsUniqueness(mediaIds: string[]): void {
 /**
  * Validates media ownership and availability.
  */
-function validateMediaOwnershipAndAvailability(
-  mediaIds: string[],
-  userId: string,
-  availableMedia: MediaEntity[],
-): void {
+function validateMediaOwnershipAndAvailability({
+  mediaIds,
+  userId,
+  availableMedia,
+}: ValidateMediaOwnershipAndAvailabilityParams): void {
   const availableMediaMap = new Map(availableMedia.map((media) => [media.id, media]));
 
   for (const mediaId of mediaIds) {
@@ -82,33 +80,7 @@ export async function validateReviewMedia(params: ValidateReviewMediaParams): Pr
     throw new BadRequestException(MEDIA_ERROR_MESSAGES.INVALID_MEDIA_IDS);
   }
 
-  validateMediaOwnershipAndAvailability(mediaIds, userId, availableMedia);
-}
-
-/**
- * Attaches media to a review record.
- */
-export async function attachReviewMedia(params: AttachReviewMediaParams): Promise<void> {
-  const { mediaIds, reviewId, mediaService, queryRunner } = params;
-
-  if (!mediaIds || mediaIds.length === 0) {
-    return;
-  }
-
-  await mediaService.attachMediaToRecord(mediaIds, MediaModuleEnum.REVIEW, reviewId, queryRunner);
-}
-
-/**
- * Detaches media from a review record.
- */
-export async function detachReviewMedia(params: DetachReviewMediaParams): Promise<void> {
-  const { mediaIds, mediaService, queryRunner } = params;
-
-  if (!mediaIds || mediaIds.length === 0) {
-    return;
-  }
-
-  await mediaService.detachMediaFromRecord(mediaIds, queryRunner);
+  validateMediaOwnershipAndAvailability({ mediaIds, userId, availableMedia });
 }
 
 /**
@@ -153,6 +125,11 @@ export async function syncReviewMedia(params: SyncReviewMediaParams): Promise<vo
   }
 
   if (dto.newMediaIds?.length) {
-    await mediaService.attachMediaToRecord(dto.newMediaIds, MediaModuleEnum.REVIEW, reviewId, queryRunner);
+    await mediaService.attachMediaToRecord({
+      mediaIds: dto.newMediaIds,
+      module: MediaModuleEnum.REVIEW,
+      recordId: reviewId,
+      queryRunner,
+    });
   }
 }

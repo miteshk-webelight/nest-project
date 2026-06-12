@@ -1,4 +1,5 @@
 import type { UpdateReviewDto } from "./dto/update-review.dto";
+import type { MediaEntity } from "../media/media.entity";
 import type { MediaService } from "../media/media.service";
 import type { QueryRunner } from "typeorm";
 
@@ -24,6 +25,12 @@ export interface ReviewMediaUpdatesParams extends WithUserAndReview, WithMediaSe
 export interface ValidateReviewMediaParams extends WithMediaService {
   mediaIds: string[] | undefined;
   userId: string;
+}
+
+export interface ValidateMediaOwnershipAndAvailabilityParams {
+  mediaIds: string[];
+  userId: string;
+  availableMedia: MediaEntity[];
 }
 
 export interface AttachReviewMediaParams extends WithQueryRunner, WithMediaService {

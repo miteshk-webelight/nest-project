@@ -1,4 +1,6 @@
+import type { MediaModuleEnum } from "./media.constants";
 import type { MediaEntity } from "./media.entity";
+import type { QueryRunner } from "typeorm";
 
 export type ValidateRemovedMediaIdsParams = {
   removedMediaIds: string[] | undefined;
@@ -19,3 +21,9 @@ export type ValidateFinalMediaCountParams = {
   minCount: number;
   maxCount: number;
 };
+export interface AttachMediaToRecordParams {
+  mediaIds: string[] | undefined;
+  module: MediaModuleEnum;
+  recordId: string;
+  queryRunner: QueryRunner;
+}

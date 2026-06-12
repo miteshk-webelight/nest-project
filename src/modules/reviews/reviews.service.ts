@@ -23,13 +23,7 @@ import { ReviewsEntity } from "./entities/reviews.entity";
 import { ReviewMedia, ReviewsListResponse } from "./responses/reviews-list.response";
 import { ERROR_MESSAGES, REVIEW_CACHE_TTL, REVIEW_SELECT_FIELDS } from "./reviews.constants";
 import { buildReviewsByProductCacheKey, clearReviewsByProductCache } from "./utils/review-cache.utils";
-import {
-  attachReviewMedia,
-  validateReviewMedia,
-  validateReviewMediaUpdates,
-  syncReviewMedia,
-  detachReviewMedia,
-} from "./utils/review-media.utils";
+import { validateReviewMedia, validateReviewMediaUpdates, syncReviewMedia } from "./utils/review-media.utils";
 import {
   applyReviewFilters,
   applyReviewSort,
@@ -79,10 +73,10 @@ export class ReviewsService {
 
         const savedReview = await queryRunner.manager.save(review);
 
-        await attachReviewMedia({
+        await this.mediaService.attachMediaToRecord({
           mediaIds: dto.mediaIds,
-          reviewId: savedReview.id,
-          mediaService: this.mediaService,
+          module: MediaModuleEnum.REVIEW,
+          recordId: savedReview.id,
           queryRunner,
         });
 
@@ -179,11 +173,7 @@ export class ReviewsService {
         if (medias.length) {
           const mediaIds = medias.map(({ id }) => id);
 
-          await detachReviewMedia({
-            mediaIds,
-            mediaService: this.mediaService,
-            queryRunner,
-          });
+          await this.mediaService.detachMediaFromRecord(mediaIds, queryRunner);
         }
 
         await queryRunner.manager.remove(ReviewsEntity, review);
