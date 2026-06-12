@@ -3,45 +3,87 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-
+      args:
+        PORT: ${PORT}
+    restart: unless-stopped
     ports:
-      - "${PORT}:3000"
-
+      - "${PORT}:${PORT}"
     env_file:
       - .env
-
-    volumes:
-      - .:/app
-      - node_modules:/app/node_modules
-
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "127.0.0.1:${PORT}/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - backend_logs:/app/logs
+    networks:
+      - app-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["node", "dist/worker.js"]
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - worker_logs:/app/logs
+    networks:
+      - app-network
 
   postgres:
     image: postgres:17
-
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${DATABASE_NAME}
       POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
-
     ports:
       - "${POSTGRES_EXTERNAL_PORT}:${DATABASE_PORT}"
-
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USER} -d ${DATABASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
 
   redis:
     image: redis:7-alpine
-
+    restart: unless-stopped
     ports:
       - "${REDIS_EXTERNAL_PORT}:${REDIS_PORT}"
-
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
   redis_data:
-  node_modules:
+  backend_logs:
+  worker_logs:
+
+networks:
+  app-network:
+    driver: bridge
