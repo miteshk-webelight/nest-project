@@ -122,4 +122,28 @@ export class ReviewsController {
       return responseUtils.error({ res, error });
     }
   }
+
+  @ApiSwaggerResponse(MessageResponse, { status: StatusCodes.OK })
+  @Patch(":reviewId/like")
+  @UseGuards(RoleGuard(UserRoleEnum.USER))
+  @RateLimit(20, 60)
+  async toggleLike(
+    @CurrentUser("id") userId: string,
+    @Res() res: Response,
+    @Param("reviewId") reviewId: string,
+  ): Promise<Response<CommonResponseType<MessageResponse>>> {
+    try {
+      const isLiked = await this.reviewsService.toggleReviewLike(userId, reviewId);
+
+      return responseUtils.success(res, {
+        data: {
+          message: isLiked ? SUCCESS_MESSAGES.REVIEW_LIKED : SUCCESS_MESSAGES.REVIEW_UNLIKED,
+        },
+        status: StatusCodes.OK,
+      });
+    } catch (error) {
+      logger.error("Error Toggling review like:", error);
+      return responseUtils.error({ res, error });
+    }
+  }
 }

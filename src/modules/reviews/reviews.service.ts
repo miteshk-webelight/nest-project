@@ -19,6 +19,7 @@ import { MediaEntity } from "../media/media.entity";
 import { CreateReviewDto } from "./dto/create-review.dto";
 import { GetReviewsByProductDto } from "./dto/get-reviews-by-product.dto";
 import { UpdateReviewDto } from "./dto/update-review.dto";
+import { ReviewLikesEntity } from "./entities/likes.entity";
 import { ReviewsEntity } from "./entities/reviews.entity";
 import { ReviewMedia, ReviewsListResponse } from "./responses/reviews-list.response";
 import { ERROR_MESSAGES, REVIEW_CACHE_TTL, REVIEW_SELECT_FIELDS } from "./reviews.constants";
@@ -355,5 +356,61 @@ export class ReviewsService {
     const limit = query.limit ?? 10;
 
     return createPaginationMeta(page, limit, total);
+  }
+
+  async toggleReviewLike(userId: string, reviewId: string): Promise<boolean> {
+    const { productId, isReviewLiked } = await this.databaseService.executeTransaction({
+      errorContext: "Toggle Review Like",
+
+      operation: async (queryRunner) => {
+        const review = await queryRunner.manager
+          .getRepository(ReviewsEntity)
+          .createQueryBuilder("review")
+          .select(REVIEW_SELECT_FIELDS.BASIC)
+          .where("review.id = :reviewId", { reviewId })
+          .getOne();
+
+        if (!review) {
+          throw new NotFoundException(ERROR_MESSAGES.REVIEW_NOT_FOUND);
+        }
+
+        if (review.userId === userId) {
+          throw new BadRequestException(ERROR_MESSAGES.CANNOT_LIKE_YOUR_OWN_REVIEW);
+        }
+
+        const existingLike = await queryRunner.manager
+          .getRepository(ReviewLikesEntity)
+          .createQueryBuilder("like")
+          .select(REVIEW_SELECT_FIELDS.LIKES)
+          .where("like.reviewId = :reviewId AND like.userId = :userId", {
+            reviewId,
+            userId,
+          })
+          .getOne();
+
+        let isLiked: boolean;
+        if (existingLike) {
+          await queryRunner.manager.remove(existingLike);
+
+          await queryRunner.manager.decrement(ReviewsEntity, { id: reviewId }, "likesCount", 1);
+          isLiked = false;
+        } else {
+          const like = queryRunner.manager.create(ReviewLikesEntity, {
+            reviewId,
+            userId,
+          });
+
+          await queryRunner.manager.save(like);
+
+          await queryRunner.manager.increment(ReviewsEntity, { id: reviewId }, "likesCount", 1);
+          isLiked = true;
+        }
+
+        return { productId: review.productId, isReviewLiked: isLiked };
+      },
+    });
+    await clearReviewsByProductCache(this.redisService, productId);
+
+    return isReviewLiked;
   }
 }

@@ -16,12 +16,16 @@ export const ERROR_MESSAGES = {
   YOU_CAN_ONLY_ATTACH_MEDIA_YOU_UPLOADED: "You can only attach media you uploaded",
   UNAUTHORIZED_REVIEW_UPDATE: "You are not authorized to update this review",
   INVALID_REVIEW_UPDATE_PAYLOAD: "Please provide at least one field to update",
+  CANNOT_LIKE_YOUR_OWN_REVIEW: "You cannot like your own review",
 };
 
 export const SUCCESS_MESSAGES = {
   REVIEW_CREATED: "Review created successfully",
   REVIEW_UPDATED: "Review updated successfully",
   REVIEW_DELETED: "Review deleted successfully",
+  REVIEW_LIKED: "Review liked successfully",
+  // eslint-disable-next-line @cspell/spellchecker
+  REVIEW_UNLIKED: "Review unliked successfully",
 };
 
 export const REVIEW_SELECT_FIELDS = {
@@ -60,6 +64,7 @@ export const REVIEW_SELECT_FIELDS = {
   AVG_RATING: "AVG(review.rating)",
   TOTAL_REVIEW_COUNT: "COUNT(review.id)",
   RATING: "review.rating",
+  LIKES: ["like.userId", "like.id", "like.reviewId"],
 };
 
 export const REVIEW_CONSTRAINTS = {
