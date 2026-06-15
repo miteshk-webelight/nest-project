@@ -17,6 +17,7 @@ import { CartsModule } from "./modules/carts/carts.module";
 import { CartsService } from "./modules/carts/carts.service";
 import { CategoriesModule } from "./modules/categories/categories.module";
 import { DatabaseModule } from "./modules/database/database.module";
+import { EmailModule } from "./modules/email/email.module";
 import { FileManagementModule } from "./modules/fileManagment/fileManagment.module";
 import { OrdersModule } from "./modules/orders/orders.module";
 import { PaymentsModule } from "./modules/payments/payments.module";
@@ -45,6 +46,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     PaymentsModule,
     OrdersModule,
     AnalyticsModule,
+    EmailModule,
     ReviewsModule,
   ],
   controllers: [AppController],
