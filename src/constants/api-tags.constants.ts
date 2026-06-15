@@ -19,4 +19,5 @@ export enum ApiTag {
   Webhook = "Webhook",
   Analytics = "Analytics",
   Reviews = "Reviews",
+  Email = "Email",
 }

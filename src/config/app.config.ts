@@ -40,4 +40,8 @@ export const appConfig = {
     minFileSize: +getOsEnv("MIN_FILE_SIZE"),
     maxFileSize: +getOsEnv("MAX_FILE_SIZE"),
   },
+  testEmail: {
+    from: getOsEnv("TEST_EMAIL_FROM"),
+    to: getOsEnv("TEST_EMAIL_TO"),
+  },
 };
