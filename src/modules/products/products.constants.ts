@@ -89,7 +89,7 @@ export const PRODUCT_SELECT_FIELDS = {
     "product.stock",
     "product.status",
   ],
-  STATUS: ["product.id", "product.status"],
+  STATUS: ["product.id", "product.status", "product.name", "product.vendorId"],
   FULL: [
     "product.id",
     "product.vendorId",

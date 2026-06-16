@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 import { QueryRunner, SelectQueryBuilder } from "typeorm";
 
@@ -13,9 +14,11 @@ import { MediaEntity } from "../media/media.entity";
 import { MediaService } from "../media/media.service";
 import { RedisService } from "../redis/redis.service";
 import { UsersEntity } from "../users/entity/users.entity";
+import { USER_LIST_SELECT_FIELDS, UserRoleEnum } from "../users/user.constants";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 import { VendorStatusEnum } from "../vendors/vendors.constants";
 
+import { ProductEvents } from "./constants/product-events";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { GetAllProductDto } from "./dto/get-all-product.dto";
 import { UpdateProductDto } from "./dto/update-product.dto";
@@ -53,6 +56,7 @@ export class ProductsService {
     private readonly databaseService: DatabaseService,
     private readonly mediaService: MediaService,
     private readonly redisService: RedisService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private async validateCategoryExistsAndActive(categoryId: string): Promise<void> {
@@ -383,7 +387,7 @@ export class ProductsService {
   }
 
   async submitProductApprovalRequest(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
-    await this.databaseService.executeTransaction({
+    const submittedProduct = await this.databaseService.executeTransaction({
       operation: async (queryRunner: QueryRunner) => {
         const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
@@ -406,11 +410,24 @@ export class ProductsService {
         product.status = ProductStatusEnum.PENDING;
 
         await productRepository.save(product);
+
+        return product;
       },
       errorContext: "Submit Product Approval Request",
     });
 
     await clearProductListCache(this.redisService);
+
+    const adminEmail = await this.getAdminEmail();
+
+    this.eventEmitter.emit(ProductEvents.PRODUCT_SUBMITTED_FOR_REVIEW, {
+      productId: submittedProduct.id,
+      productName: submittedProduct.name,
+      vendorId: vendorProfile!.id,
+      vendorName: vendorProfile!.businessName,
+      vendorEmail: vendorProfile?.businessEmail ?? "",
+      adminEmail,
+    });
   }
 
   async deleteProduct(productId: string, vendorProfile?: VendorProfileEntity): Promise<void> {
@@ -534,7 +551,7 @@ export class ProductsService {
   }
 
   async updateProductStatus(productId: string, status: ProductStatusEnum, user: UsersEntity): Promise<void> {
-    await this.databaseService.executeTransaction({
+    const result = await this.databaseService.executeTransaction({
       operation: async (queryRunner: QueryRunner) => {
         const productRepository = queryRunner.manager.getRepository(ProductEntity);
 
@@ -546,14 +563,46 @@ export class ProductsService {
 
         validateProductStatusTransition(product.status, status);
 
+        const oldStatus = product.status;
         product.status = status;
         product.reviewedBy = user.id;
         product.reviewedAt = new Date();
 
         await productRepository.save(product);
+
+        return { oldStatus, name: product.name, vendorId: product.vendorId };
       },
       errorContext: "Update product status",
     });
     await clearProductListCache(this.redisService);
+
+    const vendorProfileRepository = this.databaseService.getRepository(VendorProfileEntity);
+
+    const vendorProfile = await vendorProfileRepository.findOne({ where: { id: result.vendorId } });
+    const userRepository = this.databaseService.getRepository(UsersEntity);
+    const vendorUser = await userRepository.findOne({
+      where: { id: vendorProfile?.userId },
+    });
+
+    this.eventEmitter.emit(ProductEvents.PRODUCT_STATUS_CHANGED, {
+      productId,
+      productName: result.name,
+      vendorId: result.vendorId,
+      vendorName: vendorUser?.firstName ?? "",
+      vendorEmail: vendorUser?.email ?? "",
+      oldStatus: result.oldStatus,
+      newStatus: status,
+    });
+  }
+
+  private async getAdminEmail(): Promise<string> {
+    const admin = await this.databaseService
+      .getRepository(UsersEntity)
+      .createQueryBuilder("user")
+      .select(USER_LIST_SELECT_FIELDS)
+      .where("user.role = :role", { role: UserRoleEnum.ADMIN })
+      .getOne();
+
+    return admin?.email ?? "";
   }
 }

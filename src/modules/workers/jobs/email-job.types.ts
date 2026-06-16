@@ -1,5 +1,7 @@
 import type { EMAIL_TYPES } from "../../email/constants/email-types.constants";
 import type { AuthWelcomeData } from "../../email/templates/auth.templates";
+import type { PaymentFailedData, PaymentSuccessData } from "../../email/templates/payment.templates";
+import type { ProductStatusChangeData, ProductSubmittedAdminData } from "../../email/templates/product.templates";
 import type {
   VendorData,
   VendorRegistrationAdminData,
@@ -21,4 +23,11 @@ export interface EmailJobDataMap {
   [EMAIL_TYPES.VENDOR_REJECTED]: VendorData;
   [EMAIL_TYPES.VENDOR_SUSPENDED]: VendorData;
   [EMAIL_TYPES.VENDOR_DELETED]: VendorData;
+
+  [EMAIL_TYPES.PRODUCT_SUBMITTED_ADMIN]: ProductSubmittedAdminData;
+  [EMAIL_TYPES.PRODUCT_APPROVED]: ProductStatusChangeData;
+  [EMAIL_TYPES.PRODUCT_REJECTED]: ProductStatusChangeData;
+
+  [EMAIL_TYPES.PAYMENT_SUCCESS]: PaymentSuccessData;
+  [EMAIL_TYPES.PAYMENT_FAILED]: PaymentFailedData;
 }

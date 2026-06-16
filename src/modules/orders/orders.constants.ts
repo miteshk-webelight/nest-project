@@ -162,6 +162,7 @@ export const ORDER_SELECT_FIELDS = {
     "order.userId",
     "order.orderNumber",
     "order.totalAmount",
+    "order.paymentMethod",
     "order.paymentStatus",
     "order.razorpayOrderId",
     "order.razorpayPaymentId",

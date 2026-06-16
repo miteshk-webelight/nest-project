@@ -2,6 +2,12 @@ import { Injectable } from "@nestjs/common";
 
 import { EMAIL_TYPES } from "../constants/email-types.constants";
 import { authEmailTemplates, AuthWelcomeData } from "../templates/auth.templates";
+import { paymentEmailTemplates, PaymentFailedData, PaymentSuccessData } from "../templates/payment.templates";
+import {
+  productEmailTemplates,
+  ProductStatusChangeData,
+  ProductSubmittedAdminData,
+} from "../templates/product.templates";
 import {
   vendorEmailTemplates,
   VendorData,
@@ -33,6 +39,16 @@ export class EmailTemplateRegistry {
     this.register<VendorData>(EMAIL_TYPES.VENDOR_REJECTED, vendorEmailTemplates.rejected);
     this.register<VendorData>(EMAIL_TYPES.VENDOR_SUSPENDED, vendorEmailTemplates.suspended);
     this.register<VendorData>(EMAIL_TYPES.VENDOR_DELETED, vendorEmailTemplates.deleted);
+
+    this.register<ProductSubmittedAdminData>(
+      EMAIL_TYPES.PRODUCT_SUBMITTED_ADMIN,
+      productEmailTemplates.submittedForReviewAdmin,
+    );
+    this.register<ProductStatusChangeData>(EMAIL_TYPES.PRODUCT_APPROVED, productEmailTemplates.approved);
+    this.register<ProductStatusChangeData>(EMAIL_TYPES.PRODUCT_REJECTED, productEmailTemplates.rejected);
+
+    this.register<PaymentSuccessData>(EMAIL_TYPES.PAYMENT_SUCCESS, paymentEmailTemplates.success);
+    this.register<PaymentFailedData>(EMAIL_TYPES.PAYMENT_FAILED, paymentEmailTemplates.failed);
   }
 
   private register<T>(type: string, template: EmailTemplate<T>): void {

@@ -1,8 +1,10 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 import { QueryRunner } from "typeorm";
 
 import { razorpayConfig } from "src/config/razorpay.config";
+import { PaymentEvents } from "src/modules/payments/constants/payment-events";
 import { RazorpayService } from "src/modules/payments/razorpay.service";
 import { logger } from "src/services/logger.service";
 
@@ -10,6 +12,7 @@ import { CartItemEntity } from "../../carts/entities/cart-items.entity";
 import { CartEntity } from "../../carts/entities/carts.entity";
 import { DatabaseService } from "../../database/database.service";
 import { ProductEntity } from "../../products/product.entity";
+import { UsersEntity } from "../../users/entity/users.entity";
 import { OrderItemEntity } from "../entities/order-item.entity";
 import { OrderEntity } from "../entities/order.entity";
 import { VendorOrderEntity } from "../entities/vendor-order.entity";
@@ -24,6 +27,7 @@ export class WebhookService {
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly razorpayService: RazorpayService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -50,14 +54,14 @@ export class WebhookService {
       throw new BadRequestException(ERROR_MESSAGES.WEBHOOK_SIGNATURE_INVALID);
     }
 
-    await this.databaseService.executeTransaction({
+    const orderData = await this.databaseService.executeTransaction({
       errorContext: ORDER_ERROR_CONTEXT.PROCESS_WEBHOOK,
       operation: async (queryRunner: QueryRunner) => {
         const order = await this.findOrderForWebhook(event.razorpayOrderId, queryRunner);
 
         if (order.paymentStatus === PaymentStatusEnum.PAID) {
           logger.info(`Order ${order.orderNumber} already paid, skipping webhook processing`);
-          return;
+          return null;
         }
 
         const expectedAmount = convertToPaise(Number(order.totalAmount));
@@ -72,16 +76,42 @@ export class WebhookService {
 
         if (!stockUpdateSuccess) {
           await this.handleStockFailure(order, event.razorpayPaymentId, queryRunner);
-          return;
+          return null;
         }
 
         await this.handlePaymentSuccess(order, event.razorpayPaymentId, queryRunner);
+
+        return {
+          userId: order.userId,
+          orderId: order.id,
+          totalAmount: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+        };
       },
+    });
+
+    if (!orderData) {
+      return;
+    }
+
+    const userRepository = this.databaseService.getRepository(UsersEntity);
+
+    const user = await userRepository.findOne({ where: { id: orderData.userId } });
+
+    this.eventEmitter.emit(PaymentEvents.PAYMENT_COMPLETED, {
+      orderId: orderData.orderId,
+      userId: orderData.userId,
+      userEmail: user?.email ?? "",
+      firstName: user?.firstName ?? "",
+      amount: String(orderData.totalAmount),
+      paymentMethod: orderData.paymentMethod,
+      paymentStatus: PaymentStatusEnum.PAID,
+      paidAt: new Date().toISOString(),
     });
   }
 
   async processPaymentFailed(event: RazorpayWebhookEvent): Promise<void> {
-    await this.databaseService.executeTransaction({
+    const orderData = await this.databaseService.executeTransaction({
       errorContext: ORDER_ERROR_CONTEXT.PROCESS_WEBHOOK,
       operation: async (queryRunner: QueryRunner) => {
         const order = await this.findOrderForWebhook(event.razorpayOrderId, queryRunner);
@@ -91,7 +121,29 @@ export class WebhookService {
         });
 
         logger.info(`Order ${order.orderNumber} payment failed`);
+
+        return {
+          userId: order.userId,
+          orderId: order.id,
+          totalAmount: order.totalAmount,
+          paymentMethod: order.paymentMethod,
+        };
       },
+    });
+
+    const userRepository = this.databaseService.getRepository(UsersEntity);
+
+    const user = await userRepository.findOne({ where: { id: orderData.userId } });
+
+    this.eventEmitter.emit(PaymentEvents.PAYMENT_FAILED, {
+      orderId: orderData.orderId,
+      userId: orderData.userId,
+      userEmail: user?.email ?? "",
+      firstName: user?.firstName ?? "",
+      amount: String(orderData.totalAmount),
+      paymentMethod: orderData.paymentMethod,
+      paymentStatus: PaymentStatusEnum.FAILED,
+      failedAt: new Date().toISOString(),
     });
   }
 
