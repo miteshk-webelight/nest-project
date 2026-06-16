@@ -5,10 +5,10 @@ import type { NestExpressApplication } from "@nestjs/platform-express";
 import { appConfig } from "src/config/app.config";
 import { logger } from "src/services/logger.service";
 
-import { WorkerModule } from "./worker/worker.module";
+import { WorkersModule } from "./modules/workers/workers.module";
 
 async function createNestApp() {
-  return NestFactory.create<NestExpressApplication>(WorkerModule, {
+  return NestFactory.create<NestExpressApplication>(WorkersModule, {
     rawBody: true,
   });
 }

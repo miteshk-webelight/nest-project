@@ -27,6 +27,7 @@ import { RateLimiterModule } from "./modules/rateLimiter/rate-limiter.module";
 import { ReviewsModule } from "./modules/reviews/reviews.module";
 import { UsersModule } from "./modules/users/users.module";
 import { VendorsModule } from "./modules/vendors/vendors.module";
+import { WorkersModule } from "./modules/workers/workers.module";
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { VendorsModule } from "./modules/vendors/vendors.module";
     AnalyticsModule,
     EmailModule,
     ReviewsModule,
+    WorkersModule,
   ],
   controllers: [AppController],
   providers: [

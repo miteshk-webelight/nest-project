@@ -17,7 +17,7 @@ import { UsersEntity } from "../users/entity/users.entity";
 import { UsersService } from "../users/users.service";
 import { UserSessionService } from "../userSessions/userSession.service";
 
-import { AuthEvents, type UserLoggedInEventPayload } from "./constants/auth-events";
+import { AuthEvents, type UserLoggedInEventPayload, type UserSignedUpEventPayload } from "./constants/auth-events";
 import { ERROR_MESSAGES } from "./constants/messages";
 import { SignupUserDto } from "./dto/login.user.dto";
 
@@ -126,6 +126,12 @@ export class AuthService {
       userId: newUser.id,
       guestToken,
       isNewUser: true,
+    });
+
+    this.eventEmitter.emit(AuthEvents.USER_SIGNED_UP, {
+      userId: newUser.id,
+      email: newUser.email,
+      firstName: newUser.firstName,
     });
   }
 
