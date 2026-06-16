@@ -21,7 +21,7 @@ export class SmtpProvider implements IEmailProvider {
         pass: config.password,
       },
     });
-    this.fromEmail = config.fromEmail ?? "";
+    this.fromEmail = config.fromEmail ?? TEST_EMAIL.FROM_MAIL;
   }
 
   async validate(payload: Record<string, unknown>): Promise<void> {
