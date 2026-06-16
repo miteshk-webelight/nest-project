@@ -1,12 +1,19 @@
 import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 import { QueryRunner } from "typeorm";
 
 import { DatabaseService } from "../database/database.service";
 import { RedisService } from "../redis/redis.service";
 import { UsersEntity } from "../users/entity/users.entity";
-import { UserRoleEnum } from "../users/user.constants";
+import { USER_LIST_SELECT_FIELDS, UserRoleEnum } from "../users/user.constants";
 
+import {
+  type VendorDeletedEventPayload,
+  type VendorStatusChangedEventPayload,
+  VENDOR_STATUS_EVENT_MAP,
+  VendorEvents,
+} from "./constants/vendor-events";
 import { RegisterVendorDto } from "./dto/register-vendor.dto";
 import { UpdateVendorProfileDto } from "./dto/update-vendor-profile.dto";
 import { getVendorProfileCacheKey, getVendorStatusCacheKey } from "./utils/vendor-cache.utils";
@@ -28,6 +35,8 @@ export class VendorsService {
     private readonly redisService: RedisService,
 
     private readonly databaseService: DatabaseService,
+
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async registerAsVendor(user: UsersEntity, vendorDto: RegisterVendorDto): Promise<VendorProfileEntity> {
@@ -74,6 +83,18 @@ export class VendorsService {
       errorContext: "Register as vendor",
     });
     await this.clearVendorCache(user.id);
+
+    const adminEmail = await this.getAdminEmail();
+
+    this.eventEmitter.emit(VendorEvents.VENDOR_REGISTERED, {
+      vendorId: registeredVendor.id,
+      businessName: registeredVendor.businessName,
+      businessEmail: registeredVendor.businessEmail,
+      ownerEmail: user.email,
+      ownerFirstName: user.firstName,
+      adminEmail,
+    });
+
     return registeredVendor;
   }
 
@@ -124,6 +145,26 @@ export class VendorsService {
       errorContext: "Update Vendor Status",
     });
     await this.clearVendorCache(vendor.userId);
+
+    const user = await this.databaseService.getRepository(UsersEntity).findOne({ where: { id: vendor.userId } });
+
+    if (!user) {
+      throw new NotFoundException(ERROR_MESSAGES.USER_NOT_FOUND);
+    }
+
+    const eventPayload = {
+      vendorId: vendor.id,
+      businessName: vendor.businessName,
+      businessEmail: vendor.businessEmail,
+      ownerEmail: user.email,
+      ownerFirstName: user.firstName,
+    } satisfies VendorStatusChangedEventPayload;
+
+    const event = VENDOR_STATUS_EVENT_MAP[status];
+
+    if (event) {
+      this.eventEmitter.emit(event, eventPayload);
+    }
   }
 
   private async findVendorByUserId(userId: string): Promise<VendorProfileEntity> {
@@ -204,6 +245,17 @@ export class VendorsService {
     await this.clearVendorCache(user.id);
   }
 
+  private async getAdminEmail(): Promise<string> {
+    const admin = await this.databaseService
+      .getRepository(UsersEntity)
+      .createQueryBuilder("user")
+      .select(USER_LIST_SELECT_FIELDS)
+      .where("user.role = :role", { role: UserRoleEnum.ADMIN })
+      .getOne();
+
+    return admin?.email ?? "";
+  }
+
   private async clearVendorCache(userId: string): Promise<void> {
     await this.redisService.delete([getVendorProfileCacheKey(userId), getVendorStatusCacheKey(userId)]);
   }
@@ -236,24 +288,24 @@ export class VendorsService {
   }
 
   async deleteVendorProfile(userId: string): Promise<void> {
-    await this.databaseService.executeTransaction({
+    const vendor = await this.databaseService.executeTransaction({
       operation: async (queryRunner: QueryRunner) => {
         const vendorRepository = queryRunner.manager.getRepository(VendorProfileEntity);
 
         const userRepository = queryRunner.manager.getRepository(UsersEntity);
 
-        const vendor = await vendorRepository.findOne({
+        const vendorProfile = await vendorRepository.findOne({
           where: {
             userId,
           },
         });
 
-        if (!vendor) {
+        if (!vendorProfile) {
           throw new NotFoundException(ERROR_MESSAGES.VENDOR_APPLICATION_NOT_FOUND);
         }
 
         // Remove vendor profile
-        await vendorRepository.softDelete(vendor.id);
+        await vendorRepository.softDelete(vendorProfile.id);
 
         // Downgrade role back to normal user
         await userRepository.update(
@@ -264,9 +316,28 @@ export class VendorsService {
             role: UserRoleEnum.USER,
           },
         );
+
+        return {
+          id: vendorProfile.id,
+          businessName: vendorProfile.businessName,
+          businessEmail: vendorProfile.businessEmail,
+        };
       },
       errorContext: "Delete Vendor Profile",
     });
+
     await this.clearVendorCache(userId);
+
+    const user = await this.databaseService.getRepository(UsersEntity).findOne({ where: { id: userId } });
+
+    if (user) {
+      this.eventEmitter.emit(VendorEvents.VENDOR_DELETED, {
+        vendorId: vendor.id,
+        businessName: vendor.businessName,
+        businessEmail: vendor.businessEmail,
+        ownerEmail: user.email,
+        ownerFirstName: user.firstName,
+      } satisfies VendorDeletedEventPayload);
+    }
   }
 }

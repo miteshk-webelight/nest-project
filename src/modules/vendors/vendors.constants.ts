@@ -57,6 +57,8 @@ export const VENDOR_STATUS_SELECT_FIELDS = ["vendor.id", "vendor.userId", "vendo
 export const VENDOR_STATUS_UPDATE_SELECT_FIELDS = [
   "vendor.id",
   "vendor.userId",
+  "vendor.businessName",
+  "vendor.businessEmail",
   "vendor.status",
   "vendor.approvedBy",
   "vendor.approvedAt",

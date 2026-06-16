@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { OnEvent } from "@nestjs/event-emitter";
 
+import { EMAIL_TYPES } from "../../email/constants/email-types.constants";
 import { EmailQueueService } from "../../workers/services/email-queue.service";
 import { AuthEvents, type UserSignedUpEventPayload } from "../constants/auth-events";
 
@@ -10,10 +11,10 @@ export class AuthEmailEventsListener {
 
   @OnEvent(AuthEvents.USER_SIGNED_UP)
   async handleUserSignedUp(payload: UserSignedUpEventPayload): Promise<void> {
-    await this.emailQueueService.addWelcomeEmailJob({
-      userId: payload.userId,
+    await this.emailQueueService.addEmailJob({
+      type: EMAIL_TYPES.AUTH_WELCOME,
       email: payload.email,
-      firstName: payload.firstName,
+      data: { firstName: payload.firstName },
     });
   }
 }
