@@ -13,6 +13,7 @@ import { CartEntity } from "../../carts/entities/carts.entity";
 import { DatabaseService } from "../../database/database.service";
 import { ProductEntity } from "../../products/product.entity";
 import { UsersEntity } from "../../users/entity/users.entity";
+import { OrderEvents } from "../constants/order-events";
 import { OrderItemEntity } from "../entities/order-item.entity";
 import { OrderEntity } from "../entities/order.entity";
 import { VendorOrderEntity } from "../entities/vendor-order.entity";
@@ -108,6 +109,25 @@ export class WebhookService {
       paymentStatus: PaymentStatusEnum.PAID,
       paidAt: new Date().toISOString(),
     });
+
+    const vendorOrderRepository = this.databaseService.getRepository(VendorOrderEntity);
+
+    const vendorOrders = await vendorOrderRepository
+      .createQueryBuilder("vendorOrder")
+      .leftJoinAndSelect("vendorOrder.vendor", "vendor")
+      .where("vendorOrder.orderId = :orderId", { orderId: orderData.orderId })
+      .getMany();
+
+    for (const vendorOrder of vendorOrders) {
+      this.eventEmitter.emit(OrderEvents.ORDER_CREATED, {
+        orderId: orderData.orderId,
+        vendorId: vendorOrder.vendorId,
+        vendorEmail: vendorOrder.vendor.businessEmail,
+        vendorName: vendorOrder.vendor.businessName,
+        customerName: user?.firstName ?? "",
+        totalAmount: String(orderData.totalAmount),
+      });
+    }
   }
 
   async processPaymentFailed(event: RazorpayWebhookEvent): Promise<void> {

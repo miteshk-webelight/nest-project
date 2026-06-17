@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { EventEmitter2 } from "@nestjs/event-emitter";
 
 import { QueryRunner, SelectQueryBuilder } from "typeorm";
 
@@ -7,10 +8,13 @@ import { DatabaseService } from "src/modules/database/database.service";
 import { RazorpayService } from "src/modules/payments/razorpay.service";
 import { ProductEntity } from "src/modules/products/product.entity";
 import { RedisService } from "src/modules/redis/redis.service";
+import { UsersEntity } from "src/modules/users/entity/users.entity";
 import { UserRoleEnum } from "src/modules/users/user.constants";
+import { VendorProfileEntity } from "src/modules/vendors/vendor.profile.entity";
 import { applyPagination } from "src/utils/helper.utils";
 import { createPaginationMeta } from "src/utils/pagination.utils";
 
+import { OrderEvents } from "../constants/order-events";
 import { ListOrdersDto } from "../dto/list-orders.dto";
 import { UpdateVendorOrderStatusDto } from "../dto/udpate-vendor-order-status.dto";
 import { OrderItemEntity } from "../entities/order-item.entity";
@@ -44,6 +48,7 @@ export class OrderService {
     private readonly databaseService: DatabaseService,
     private readonly redisService: RedisService,
     private readonly razorpayService: RazorpayService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async getMyOrders(access: OrderAccessContext, query: ListOrdersDto): Promise<OrdersListResponse> {
@@ -278,7 +283,7 @@ export class OrderService {
     vendorOrderId: string,
     dto: UpdateVendorOrderStatusDto,
   ): Promise<void> {
-    const [orderId, userId] = await this.databaseService.executeTransaction({
+    const result = await this.databaseService.executeTransaction({
       operation: async (queryRunner: QueryRunner) => {
         if (!vendorId) {
           throw new ForbiddenException();
@@ -304,7 +309,9 @@ export class OrderService {
 
         validateVendorOrderStatusTransition(vendorOrder.status, dto.status);
 
-        if (isOnlinePayment && dto.status === VendorOrderStatusEnum.CANCELLED) {
+        const wasRefunded = isOnlinePayment && dto.status === VendorOrderStatusEnum.CANCELLED;
+
+        if (wasRefunded) {
           await this.razorpayService.refundPayment(vendorOrder.order.razorpayPaymentId!);
           const { id } = vendorOrder.order;
 
@@ -319,15 +326,66 @@ export class OrderService {
         }
         vendorOrder.status = dto.status;
         await vendorOrderRepo.save(vendorOrder);
-        return [vendorOrder.order.id, vendorOrder.order.userId];
+        return {
+          orderId: vendorOrder.order.id,
+          userId: vendorOrder.order.userId,
+          totalAmount: String(vendorOrder.order.totalAmount),
+          newStatus: dto.status,
+          wasRefunded,
+        };
       },
       errorContext: ORDER_ERROR_CONTEXT.UPDATE_ORDER_STATUS,
     });
-    await invalidateCache(this.redisService, orderId, userId, vendorId);
+
+    const userRepository = this.databaseService.getRepository(UsersEntity);
+
+    const user = await userRepository.findOne({ where: { id: result.userId } });
+
+    if (result.newStatus === VendorOrderStatusEnum.PROCESSING) {
+      this.eventEmitter.emit(OrderEvents.ORDER_CONFIRMED, {
+        orderId: result.orderId,
+        userEmail: user?.email ?? "",
+        firstName: user?.firstName ?? "",
+        totalAmount: result.totalAmount,
+      });
+    }
+
+    if (result.newStatus === VendorOrderStatusEnum.DELIVERED) {
+      this.eventEmitter.emit(OrderEvents.ORDER_DELIVERED, {
+        orderId: result.orderId,
+        userEmail: user?.email ?? "",
+        firstName: user?.firstName ?? "",
+      });
+    }
+
+    if (result.newStatus === VendorOrderStatusEnum.CANCELLED) {
+      this.eventEmitter.emit(OrderEvents.ORDER_CANCELLED_BY_VENDOR, {
+        orderId: result.orderId,
+        userEmail: user?.email ?? "",
+        firstName: user?.firstName ?? "",
+      });
+
+      if (result.wasRefunded) {
+        const vendorRepository = this.databaseService.getRepository(VendorProfileEntity);
+
+        const vendor = await vendorRepository.findOne({ where: { id: vendorId! } });
+
+        this.eventEmitter.emit(OrderEvents.ORDER_REFUNDED, {
+          orderId: result.orderId,
+          amount: result.totalAmount,
+          userEmail: user?.email ?? "",
+          firstName: user?.firstName,
+          vendorEmail: vendor?.businessEmail ?? "",
+          vendorName: vendor?.businessName,
+        });
+      }
+    }
+
+    await invalidateCache(this.redisService, result.orderId, result.userId, vendorId);
   }
 
   async cancelOrder(orderId: string, userId: string): Promise<void> {
-    await this.databaseService.executeTransaction({
+    const result = await this.databaseService.executeTransaction({
       errorContext: ORDER_ERROR_CONTEXT.CANCEL_ORDER,
       operation: async (queryRunner: QueryRunner) => {
         const order = await this.loadOrderForCancellation(orderId, userId, queryRunner);
@@ -348,19 +406,53 @@ export class OrderService {
 
         const isOnlinePayment = order.paymentMethod === PaymentMethodEnum.RAZORPAY;
 
-        if (isOnlinePayment && order.paymentStatus === PaymentStatusEnum.PAID) {
+        const wasRefunded = isOnlinePayment && order.paymentStatus === PaymentStatusEnum.PAID;
+
+        if (wasRefunded) {
           await this.razorpayService.refundPayment(order.razorpayPaymentId!);
         }
 
         await queryRunner.manager.update(OrderEntity, order.id, {
           status: OrderStatusEnum.CANCELLED,
-          ...(isOnlinePayment &&
-            order.paymentStatus === PaymentStatusEnum.PAID && {
-              paymentStatus: PaymentStatusEnum.REFUNDED,
-            }),
+          ...(wasRefunded && {
+            paymentStatus: PaymentStatusEnum.REFUNDED,
+          }),
         });
+
+        return { wasRefunded, totalAmount: String(order.totalAmount) };
       },
     });
+
+    const userRepository = this.databaseService.getRepository(UsersEntity);
+
+    const user = await userRepository.findOne({ where: { id: userId } });
+
+    this.eventEmitter.emit(OrderEvents.ORDER_CANCELLED_BY_USER, {
+      orderId,
+      userEmail: user?.email ?? "",
+      firstName: user?.firstName ?? "",
+    });
+
+    if (result.wasRefunded) {
+      const vendorOrderRepository = this.databaseService.getRepository(VendorOrderEntity);
+
+      const vendorOrders = await vendorOrderRepository
+        .createQueryBuilder("vendorOrder")
+        .leftJoinAndSelect("vendorOrder.vendor", "vendor")
+        .where("vendorOrder.orderId = :orderId", { orderId })
+        .getMany();
+
+      for (const vendorOrder of vendorOrders) {
+        this.eventEmitter.emit(OrderEvents.ORDER_REFUNDED, {
+          orderId,
+          amount: result.totalAmount,
+          userEmail: user?.email ?? "",
+          firstName: user?.firstName,
+          vendorEmail: vendorOrder.vendor.businessEmail,
+          vendorName: vendorOrder.vendor.businessName,
+        });
+      }
+    }
 
     await invalidateCache(this.redisService, orderId, userId);
   }

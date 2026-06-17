@@ -2,6 +2,16 @@ import { Injectable } from "@nestjs/common";
 
 import { EMAIL_TYPES } from "../constants/email-types.constants";
 import { authEmailTemplates, AuthWelcomeData } from "../templates/auth.templates";
+import {
+  orderEmailTemplates,
+  OrderCancelledUserData,
+  OrderCancelledVendorData,
+  OrderConfirmedData,
+  OrderDeliveredData,
+  OrderRefundUserData,
+  OrderRefundVendorData,
+  VendorOrderCreatedData,
+} from "../templates/order.templates";
 import { paymentEmailTemplates, PaymentFailedData, PaymentSuccessData } from "../templates/payment.templates";
 import {
   productEmailTemplates,
@@ -49,6 +59,17 @@ export class EmailTemplateRegistry {
 
     this.register<PaymentSuccessData>(EMAIL_TYPES.PAYMENT_SUCCESS, paymentEmailTemplates.success);
     this.register<PaymentFailedData>(EMAIL_TYPES.PAYMENT_FAILED, paymentEmailTemplates.failed);
+
+    this.register<VendorOrderCreatedData>(EMAIL_TYPES.ORDER_CREATED_VENDOR, orderEmailTemplates.vendorOrderCreated);
+    this.register<OrderConfirmedData>(EMAIL_TYPES.ORDER_CONFIRMED_USER, orderEmailTemplates.orderConfirmed);
+    this.register<OrderDeliveredData>(EMAIL_TYPES.ORDER_DELIVERED_USER, orderEmailTemplates.orderDelivered);
+    this.register<OrderCancelledVendorData>(
+      EMAIL_TYPES.ORDER_CANCELLED_VENDOR,
+      orderEmailTemplates.orderCancelledVendor,
+    );
+    this.register<OrderCancelledUserData>(EMAIL_TYPES.ORDER_CANCELLED_USER, orderEmailTemplates.orderCancelledUser);
+    this.register<OrderRefundUserData>(EMAIL_TYPES.ORDER_REFUNDED_USER, orderEmailTemplates.refundUser);
+    this.register<OrderRefundVendorData>(EMAIL_TYPES.ORDER_REFUNDED_VENDOR, orderEmailTemplates.refundVendor);
   }
 
   private register<T>(type: string, template: EmailTemplate<T>): void {

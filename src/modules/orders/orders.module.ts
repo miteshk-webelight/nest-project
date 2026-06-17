@@ -11,12 +11,14 @@ import { ProductsModule } from "../products/products.module";
 import { UsersModule } from "../users/users.module";
 import { VendorProfileEntity } from "../vendors/vendor.profile.entity";
 import { VendorsModule } from "../vendors/vendors.module";
+import { WorkersModule } from "../workers/workers.module";
 
 import { OrdersController } from "./controllers/orders.controller";
 import { WebhooksController } from "./controllers/webhooks.controller";
 import { OrderItemEntity } from "./entities/order-item.entity";
 import { OrderEntity } from "./entities/order.entity";
 import { VendorOrderEntity } from "./entities/vendor-order.entity";
+import { OrderEmailEventsListener } from "./listeners/order-email-events.listener";
 import { CheckoutService } from "./services/checkout.service";
 import { OrderService } from "./services/order.service";
 import { PaymentService } from "./services/payment.service";
@@ -30,6 +32,7 @@ import { WebhookService } from "./services/webhook.service";
     UsersModule,
     VendorsModule,
     PaymentsModule,
+    WorkersModule,
     TypeOrmModule.forFeature([
       CartEntity,
       CartItemEntity,
@@ -41,7 +44,7 @@ import { WebhookService } from "./services/webhook.service";
     ]),
   ],
   controllers: [OrdersController, WebhooksController],
-  providers: [CheckoutService, PaymentService, WebhookService, OrderService],
+  providers: [OrderEmailEventsListener, CheckoutService, PaymentService, WebhookService, OrderService],
   exports: [CheckoutService, PaymentService, WebhookService, OrderService],
 })
 export class OrdersModule {}

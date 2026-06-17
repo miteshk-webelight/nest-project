@@ -14,4 +14,12 @@ export const EMAIL_TYPES = {
 
   PAYMENT_SUCCESS: "payment.success",
   PAYMENT_FAILED: "payment.failed",
+
+  ORDER_CREATED_VENDOR: "order.created.vendor",
+  ORDER_CONFIRMED_USER: "order.confirmed.user",
+  ORDER_DELIVERED_USER: "order.delivered.user",
+  ORDER_CANCELLED_VENDOR: "order.cancelled.vendor",
+  ORDER_CANCELLED_USER: "order.cancelled.user",
+  ORDER_REFUNDED_USER: "order.refunded.user",
+  ORDER_REFUNDED_VENDOR: "order.refunded.vendor",
 } as const;

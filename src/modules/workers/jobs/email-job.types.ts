@@ -1,5 +1,14 @@
 import type { EMAIL_TYPES } from "../../email/constants/email-types.constants";
 import type { AuthWelcomeData } from "../../email/templates/auth.templates";
+import type {
+  OrderCancelledUserData,
+  OrderCancelledVendorData,
+  OrderConfirmedData,
+  OrderDeliveredData,
+  OrderRefundUserData,
+  OrderRefundVendorData,
+  VendorOrderCreatedData,
+} from "../../email/templates/order.templates";
 import type { PaymentFailedData, PaymentSuccessData } from "../../email/templates/payment.templates";
 import type { ProductStatusChangeData, ProductSubmittedAdminData } from "../../email/templates/product.templates";
 import type {
@@ -30,4 +39,12 @@ export interface EmailJobDataMap {
 
   [EMAIL_TYPES.PAYMENT_SUCCESS]: PaymentSuccessData;
   [EMAIL_TYPES.PAYMENT_FAILED]: PaymentFailedData;
+
+  [EMAIL_TYPES.ORDER_CREATED_VENDOR]: VendorOrderCreatedData;
+  [EMAIL_TYPES.ORDER_CONFIRMED_USER]: OrderConfirmedData;
+  [EMAIL_TYPES.ORDER_DELIVERED_USER]: OrderDeliveredData;
+  [EMAIL_TYPES.ORDER_CANCELLED_VENDOR]: OrderCancelledVendorData;
+  [EMAIL_TYPES.ORDER_CANCELLED_USER]: OrderCancelledUserData;
+  [EMAIL_TYPES.ORDER_REFUNDED_USER]: OrderRefundUserData;
+  [EMAIL_TYPES.ORDER_REFUNDED_VENDOR]: OrderRefundVendorData;
 }
