@@ -38,11 +38,11 @@ export class AuthService {
     return crypto.createHash("sha256").update(token).digest("hex");
   }
 
-  private getExpiryDate(expiresIn: string): Date {
+  private getExpiryDate(expiresIn: string | number): Date {
     const numericExpiry = Number(expiresIn);
     if (!Number.isNaN(numericExpiry)) return new Date(Date.now() + numericExpiry * 1000);
 
-    const match = expiresIn.match(/^(\d+)([smhd])$/);
+    const match = String(expiresIn).match(/^(\d+)([smhd])$/);
     if (!match) return new Date(Date.now() + Number(appConfig.tokenExpiry.refreshTokenCookieExpiry) * 1000);
 
     const value = Number(match[1]);

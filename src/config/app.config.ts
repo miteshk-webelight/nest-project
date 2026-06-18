@@ -26,12 +26,12 @@ export const appConfig = {
   cookieDomain: getOsEnv("COOKIE_DOMAIN"),
   tokenExpiry: {
     resetPasswordRedis: +getOsEnv("REDIS_RESET_PASSWORD_TOKEN_EXPIRY"),
-    resetPassword: getOsEnv("RESET_PASSWORD_TOKEN_EXPIRY"),
-    refreshToken: getOsEnv("REFRESH_TOKEN_EXPIRY"),
-    accessToken: getOsEnv("ACCESS_TOKEN_EXPIRY"),
-    refreshTokenCookieExpiry: getOsEnv("REFRESH_TOKEN_COOKIE_EXPIRY"),
-    accessTokenCookieExpiry: getOsEnv("ACCESS_TOKEN_COOKIE_EXPIRY"),
-    invitation: getOsEnv("INVITATION_TOKEN_EXPIRY"),
+    resetPassword: +getOsEnv("RESET_PASSWORD_TOKEN_EXPIRY"),
+    refreshToken: +getOsEnv("REFRESH_TOKEN_EXPIRY"),
+    accessToken: +getOsEnv("ACCESS_TOKEN_EXPIRY"),
+    refreshTokenCookieExpiry: +getOsEnv("REFRESH_TOKEN_COOKIE_EXPIRY"),
+    accessTokenCookieExpiry: +getOsEnv("ACCESS_TOKEN_COOKIE_EXPIRY"),
+    invitation: +getOsEnv("INVITATION_TOKEN_EXPIRY"),
   },
   documents: {
     allowedFileTypes: getOsEnv("ALLOWED_FILE_TYPES").split(","),

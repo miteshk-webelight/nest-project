@@ -7,7 +7,7 @@ import { secretConfig } from "../../config/secret.config";
 import { ERROR_MESSAGES } from "../../constants/messages.constants";
 
 export class AuthHelperService {
-  jwtSign(payload: object, expiresIn = secretConfig.jwtExpirationTime): string {
+  jwtSign(payload: object, expiresIn: string | number = secretConfig.jwtExpirationTime): string {
     return sign(payload, secretConfig.jwtSecretKey, {
       expiresIn,
     });
