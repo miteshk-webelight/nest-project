@@ -56,6 +56,7 @@ export const REVIEW_SELECT_FIELDS = {
     "user.id",
     "user.firstName",
     "user.lastName",
+    "user.avatarUrl",
   ],
   PRODUCT: ["product.id", "product.name", "product.slug", "product.status", "product.isActive"],
   VENDOR: ["vendor.id", "vendor.status"],

@@ -1,6 +1,20 @@
-import { Expose } from "class-transformer";
+import { Expose, Type } from "class-transformer";
 
 import { ApiPropertyWritable } from "../../swagger/swagger.writable.decorator";
+
+export class UserInfo {
+  @Expose()
+  @ApiPropertyWritable()
+  id: string;
+
+  @Expose()
+  @ApiPropertyWritable()
+  fullName: string;
+
+  @Expose()
+  @ApiPropertyWritable({ nullable: true })
+  avatar?: string;
+}
 
 export class ReviewResponse {
   @Expose()
@@ -8,8 +22,9 @@ export class ReviewResponse {
   id: string;
 
   @Expose()
-  @ApiPropertyWritable()
-  userId: string;
+  @Type(() => UserInfo)
+  @ApiPropertyWritable({ type: () => UserInfo })
+  user: UserInfo;
 
   @Expose()
   @ApiPropertyWritable()

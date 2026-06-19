@@ -8,6 +8,16 @@ import { ApiPropertyWritable } from "../swagger/swagger.writable.decorator";
 
 import { ProductStatusEnum } from "./products.constants";
 
+export class VendorInfo {
+  @Expose()
+  @ApiPropertyWritable()
+  id: string;
+
+  @Expose()
+  @ApiPropertyWritable()
+  storeName: string;
+}
+
 export class ProductResponse {
   @Expose()
   @ApiPropertyWritable()
@@ -49,6 +59,19 @@ export class ProductResponse {
   @Type(() => MediaResponse)
   @ApiPropertyWritable({ type: () => MediaResponse, isArray: true })
   media: MediaResponse[];
+
+  @Expose()
+  @Type(() => VendorInfo)
+  @ApiPropertyWritable({ type: () => VendorInfo })
+  vendor: VendorInfo;
+
+  @Expose()
+  @ApiPropertyWritable()
+  averageRating: number;
+
+  @Expose()
+  @ApiPropertyWritable()
+  reviewCount: number;
 
   @Expose()
   @ApiPropertyWritable()
