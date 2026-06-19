@@ -96,7 +96,11 @@ export function buildReviewsListResponse({
   return {
     data: reviews.map((review) => ({
       id: review.id,
-      userId: review.userId,
+      user: {
+        id: review.user.id,
+        fullName: `${review.user.firstName} ${review.user.lastName ?? ""}`.trim(),
+        avatar: review.user.avatarUrl,
+      },
       productId: review.productId,
       orderItemId: review.orderItemId,
       title: review.title,

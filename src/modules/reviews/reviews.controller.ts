@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 
 import { ApiTag } from "src/constants/api-tags.constants";
 import { CurrentUser } from "src/decorators/current-user.decorator";
+import { Public } from "src/decorators/public.decorator";
 import { RoleGuard } from "src/guards/role-guard";
 import { RateLimit } from "src/modules/rateLimiter/decorators/rate-limit.decorator";
 import { UserRoleEnum } from "src/modules/users/user.constants";
@@ -54,7 +55,7 @@ export class ReviewsController {
 
   @ApiSwaggerResponse(ReviewsListResponse)
   @Get("product")
-  @UseGuards(RoleGuard(UserRoleEnum.USER, UserRoleEnum.ADMIN, UserRoleEnum.VENDOR))
+  @Public()
   @RateLimit(60, 60)
   async getReviewsByProduct(
     @Query() query: GetReviewsByProductDto,

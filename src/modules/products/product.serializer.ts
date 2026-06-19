@@ -28,6 +28,12 @@ function getBaseFields(product: ProductEntity, media: MediaEntity[]): Partial<Pr
     price: product.price,
     discountPrice: product.discountPrice,
     media: serializeMedia(media),
+    vendor: {
+      id: product.vendor.id,
+      storeName: product.vendor.businessName,
+    },
+    averageRating: Number(product.averageRating) || 0,
+    reviewCount: product.reviewCount || 0,
   };
 }
 

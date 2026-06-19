@@ -131,6 +131,9 @@ export const PRODUCT_SELECT_FIELDS = {
     "product.updatedAt",
     "vendor.id",
     "vendor.status",
+    "vendor.businessName",
+    "product.averageRating",
+    "product.reviewCount",
   ],
   PUBLIC_LIST: [
     "product.id",

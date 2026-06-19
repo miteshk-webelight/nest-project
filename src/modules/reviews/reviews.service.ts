@@ -270,10 +270,8 @@ export class ReviewsService {
 
         const reviews = await this.fetchReviews(query);
 
-        if (!reviews.length) throw new NotFoundException(ERROR_MESSAGES.REVIEWS_NOT_EXISTS_FOR_THE_PRODUCT);
-
         const reviewIds = reviews.map(({ id }) => id);
-        const medias = await this.getMediasByReviewIds(reviewIds);
+        const medias = reviewIds.length > 0 ? await this.getMediasByReviewIds(reviewIds) : [];
 
         const ratingDistribution = await this.fetchRatingDistribution(query.productId);
 
